@@ -1,5 +1,11 @@
 # Drudge CLI Tool - Professional Python Package Edition
 
+[![GitHub](https://img.shields.io/badge/GitHub-Trik16%2Fdrudge-blue?logo=github)](https://github.com/Trik16/drudge)
+[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Typer](https://img.shields.io/badge/CLI-Typer-green.svg)](https://typer.tiangolo.com/)
+
 A comprehensive, professionally architected command-line tool for tracking work time on tasks with organized daily logs.
 Built with modern Python package structure, Typer CLI framework, Rich formatting, type hints, dataclasses, and enterprise-level architectural patterns.
 
