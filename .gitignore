@@ -3,5 +3,10 @@ GITHUB_SETUP.md
 PRE_RELEASE_CLEANUP.md
 REFACTORING_SUMMARY.md
 BADGES_REFERENCE.md
+PYPI_PUBLISHING.md
 .venv/
 __pycache__/
+dist/
+src/drudge.egg-info/    
+src/drudge_cli.egg-info/
+*.pyc

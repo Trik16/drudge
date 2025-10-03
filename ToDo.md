@@ -18,10 +18,10 @@
 ## 🚀 Immediate Next Steps (Foundation)
 
 - [ ] **1. Pip/PyPI publishing setup**
-  - Create setup.py, pyproject.toml, and publish Drudge CLI to PyPI for easy installation via `pip install drudge-cli`
+  - Create setup.py, pyproject.toml, and publish Drudge CLI to PyPI for easy installation via `pip install drudge`
   - Include proper versioning, dependencies, and metadata
-  - GitHub repository: drudge-cli
-  - PyPI package: drudge-cli
+  - GitHub repository: drudge
+  - PyPI package: drudge
 
 - [ ] **3. Configuration file support**
   - Add YAML/TOML configuration file support for persistent settings and user preferences
