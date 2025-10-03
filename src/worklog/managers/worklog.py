@@ -753,7 +753,7 @@ class WorkLog:
         # Apply date filter
         if date:
             try:
-                WorkLogValidator.validate_date_format(date)
+                WorkLogValidator.validate_date_format(date, self.config)
                 entries = [e for e in entries if e.start_time.startswith(date)]
             except ValueError as e:
                 console.print(f"❌ Invalid date format: {e}", style="red")
@@ -795,7 +795,7 @@ class WorkLog:
         
         # Validate date format
         try:
-            WorkLogValidator.validate_date_format(target_date)
+            WorkLogValidator.validate_date_format(target_date, self.config)
         except ValueError as e:
             console.print(f"❌ Invalid date format: {e}", style="red")
             return

@@ -141,13 +141,11 @@ class TestDataClasses(unittest.TestCase):
         """Test PausedTask dataclass creation."""
         paused_task = PausedTask(
             task="Paused Task",
-            total_duration_so_far="01:00:00",
-            last_paused_at="2023-12-31T14:30:00"
+            start_time="2023-12-31T14:30:00"
         )
         
         self.assertEqual(paused_task.task, "Paused Task")
-        self.assertEqual(paused_task.total_duration_so_far, "01:00:00")
-        self.assertEqual(paused_task.last_paused_at, "2023-12-31T14:30:00")
+        self.assertEqual(paused_task.start_time, "2023-12-31T14:30:00")
     
     def test_worklog_data_creation(self):
         """Test WorkLogData dataclass with default values."""
@@ -161,7 +159,7 @@ class TestDataClasses(unittest.TestCase):
     def test_worklog_data_with_data(self):
         """Test WorkLogData with actual data."""
         entry = TaskEntry(task="Test", start_time="2023-12-31T14:30:00")
-        paused = PausedTask(task="Paused", total_duration_so_far="00:30:00", last_paused_at="2023-12-31T13:00:00")
+        paused = PausedTask(task="Paused", start_time="2023-12-31T13:00:00")
         
         data = WorkLogData(
             entries=[entry],
@@ -222,7 +220,7 @@ class TestTimeHandling(unittest.TestCase):
     
     def test_get_current_timestamp(self):
         """Test getting current timestamp returns ISO format."""
-        with patch('worklog.datetime') as mock_datetime:
+        with patch('src.worklog.managers.worklog.datetime') as mock_datetime:
             mock_datetime.now.return_value = datetime(2025, 10, 3, 15, 30, 45)
             mock_datetime.fromisoformat = datetime.fromisoformat
             
@@ -266,7 +264,7 @@ class TestTaskOperations(unittest.TestCase):
             os.environ['HOME'] = self.original_home
         shutil.rmtree(self.test_dir, ignore_errors=True)
     
-    @patch('worklog.WorkLog._get_current_timestamp')
+    @patch('src.worklog.managers.worklog.WorkLog._get_current_timestamp')
     def test_start_new_task(self, mock_timestamp):
         """Test starting a new task."""
         mock_timestamp.return_value = '2025-10-03T09:00:00'
@@ -284,20 +282,13 @@ class TestTaskOperations(unittest.TestCase):
         result = self.worklog.start_task("Existing Task")
         self.assertFalse(result)  # Should return False for already active task
     
-    @patch('worklog.WorkLog._get_current_timestamp')
+    @patch('src.worklog.managers.worklog.WorkLog._get_current_timestamp')
     def test_end_active_task(self, mock_timestamp):
         """Test ending an active task."""
         mock_timestamp.return_value = '2025-10-03T10:00:00'
         
-        # Set up an active task and corresponding entry
+        # Set up an active task (end_task will create the entry)
         self.worklog.data.active_tasks["Active Task"] = '2025-10-03T09:00:00'
-        entry = TaskEntry(
-            task="Active Task",
-            start_time='2025-10-03T09:00:00',
-            end_time=None,
-            duration=None
-        )
-        self.worklog.data.entries.append(entry)
         
         result = self.worklog.end_task("Active Task")
         
@@ -305,7 +296,7 @@ class TestTaskOperations(unittest.TestCase):
         self.assertNotIn("Active Task", self.worklog.data.active_tasks)
         self.assertTrue(result)  # Should return True for successful end
         
-        # Task entry should be updated
+        # Task entry should be created
         self.assertEqual(len(self.worklog.data.entries), 1)
         updated_entry = self.worklog.data.entries[0]
         self.assertEqual(updated_entry.task, "Active Task")
@@ -335,48 +326,50 @@ class TestSessionManagement(unittest.TestCase):
     
     @patch('worklog.WorkLog._get_current_timestamp')
     def test_pause_all_tasks(self, mock_timestamp):
-        """Test pausing all active tasks."""
+        """Test pausing active tasks."""
         mock_timestamp.return_value = '2025-10-03T10:00:00'
         
-        # Set up active tasks
-        task1_start = '2025-10-03T09:00:00'
-        task2_start = '2025-10-03T09:30:00'
+        # Set up an active task
+        task_start = '2025-10-03T09:00:00'
         self.worklog.data.active_tasks = {
-            "Task 1": task1_start,
-            "Task 2": task2_start
+            "Task 1": task_start
         }
         
-        self.worklog.pause_all_tasks()
+        # Pause the task
+        result = self.worklog.pause_task("Task 1")
         
+        self.assertTrue(result)
         # Active tasks should be cleared
-        self.assertEqual(len(self.worklog.data.active_tasks), 0)
+        self.assertNotIn("Task 1", self.worklog.data.active_tasks)
         
-        # Should have paused tasks
-        self.assertEqual(len(self.worklog.data.paused_tasks), 2)
+        # Should have paused task
+        self.assertEqual(len(self.worklog.data.paused_tasks), 1)
         
         # Check paused task structure
-        paused_task1 = next(t for t in self.worklog.data.paused_tasks if t.task == "Task 1")
-        self.assertEqual(paused_task1.task, "Task 1")
+        paused_task = self.worklog.data.paused_tasks[0]
+        self.assertEqual(paused_task.task, "Task 1")
+        self.assertEqual(paused_task.start_time, task_start)
     
     def test_resume_no_paused_tasks(self):
-        """Test resume when no tasks are paused."""
-        result = self.worklog.resume_last_task()
-        self.assertFalse(result)
+        """Test resume when task is not paused - should start it as new."""
+        result = self.worklog.resume_task("Nonexistent Task")
+        # resume_task calls start_task, so it will succeed and start a new task
+        self.assertTrue(result)
+        self.assertIn("Nonexistent Task", self.worklog.data.active_tasks)
     
     @patch('worklog.WorkLog._get_current_timestamp')
     def test_resume_last_task(self, mock_timestamp):
-        """Test resuming the most recently paused task."""
+        """Test resuming a paused task."""
         mock_timestamp.return_value = '2025-10-03T11:00:00'
         
         # Set up a paused task
         paused_task = PausedTask(
             task="Paused Task",
-            total_duration_so_far="01:00:00",
-            last_paused_at='2025-10-03T09:00:00'
+            start_time='2025-10-03T09:00:00'
         )
         self.worklog.data.paused_tasks = [paused_task]
         
-        result = self.worklog.resume_last_task()
+        result = self.worklog.resume_task("Paused Task")
         
         self.assertTrue(result)
         self.assertEqual(len(self.worklog.data.paused_tasks), 0)
@@ -401,14 +394,14 @@ class TestCLIIntegration(unittest.TestCase):
         """Test that help command works correctly."""
         result = self.runner.invoke(app, ["--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("Track work time", result.stdout)
+        self.assertIn("Drudge CLI", result.stdout)
+        self.assertIn("work time tracking", result.stdout)
     
     def test_task_command_help(self):
-        """Test task command help shows options."""
-        result = self.runner.invoke(app, ["task", "--help"])
+        """Test start command help shows options."""
+        result = self.runner.invoke(app, ["start", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("--parallel", result.stdout)
-        self.assertIn("--start-time", result.stdout)
+        self.assertIn("Start a new task", result.stdout)
 
 
 if __name__ == '__main__':
