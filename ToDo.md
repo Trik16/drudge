@@ -2,6 +2,31 @@
 
 ## ✅ Completed Tasks
 
+### Version 2.1.0 (October 4, 2025) ✅ **RELEASED**
+- [x] **Enhanced CLI Features** ✅ **COMPLETED**
+  - ✅ Native help system integration (removed custom help command, using Typer's --help)
+  - ✅ Enhanced end command with `--all` flag to end active AND paused tasks
+  - ✅ Clean command implementation for worklog management:
+    - `drudge clean YYYY-MM-DD` - Clean all entries for a date
+    - `drudge clean "Task"` - Clean all entries for a task
+    - `drudge clean "Task" --date YYYY-MM-DD` - Clean task for specific date
+    - `drudge clean --all` - Clean all entries (with confirmation)
+  - ✅ Automatic backups before cleaning operations
+  - ✅ Smart daily file rebuilding for partial cleaning
+  - ✅ All 39 test cases passing
+
+- [x] **Documentation & Release** ✅ **COMPLETED**
+  - ✅ Updated README.md with v2.1.0 features
+  - ✅ Created CHANGELOG.md for version history
+  - ✅ Created docs/RELEASE_2.1.0.md with detailed release notes
+  - ✅ Version bumped to 2.1.0 in all files (pyproject.toml, __init__.py, commands.py)
+
+- [x] **CI/CD & Automation** ✅ **COMPLETED**
+  - ✅ GitHub Actions workflow for automated testing (test.yml)
+  - ✅ GitHub Actions workflow for PyPI publishing on tags (publish.yml)
+  - ✅ PyPI Trusted Publishing configuration (no API tokens needed)
+  - ✅ Created setup guides (GITHUB_ACTIONS_SETUP.md, GITHUB_ACTIONS_QUICKSTART.md)
+
 - [x] **2. Folder and file refactor** ✅ **COMPLETED**
   - ✅ Reorganized project structure into proper Python package with src/worklog/
   - ✅ Split worklog.py into multiple modules with logical separation:
@@ -15,22 +40,28 @@
   - ✅ All tests passing with new structure
   - ✅ README updated with package architecture documentation
 
-## 🚀 Immediate Next Steps (Foundation)
+- [x] **1. Pip/PyPI publishing setup** ✅ **COMPLETED**
+  - ✅ Created pyproject.toml with proper metadata and dependencies
+  - ✅ Package name: `drudge-cli` (on PyPI)
+  - ✅ Command name: `drudge` (console script entry point)
+  - ✅ GitHub repository: https://github.com/Trik16/drudge
+  - ✅ Automated PyPI publishing via GitHub Actions
+  - ✅ Version 2.1.0 ready for release
 
-- [ ] **1. Pip/PyPI publishing setup**
-  - Create setup.py, pyproject.toml, and publish Drudge CLI to PyPI for easy installation via `pip install drudge`
-  - Include proper versioning, dependencies, and metadata
-  - GitHub repository: drudge
-  - PyPI package: drudge
+## 🚀 Immediate Next Steps (Foundation)
 
 - [ ] **3. Configuration file support**
   - Add YAML/TOML configuration file support for persistent settings and user preferences
   - Allow customization of directories, formats, and default behaviors
+  - Example: `~/.worklog/config.toml` or `~/.drudgerc`
 
-## ⭐ Core Feature Extensions
+## 🎯 Version 2.2.0 Planning (Future Release)
+
+### Core Feature Extensions
 - [ ] **4. Project/Category Support**
   - Add project grouping functionality to organize tasks by project or category with filtering and reporting
   - Enable task categorization and project-based time tracking
+  - Example: `drudge start "Fix bug" --project "Backend API"`
 
 - [ ] **5. Time Goals feature**
   - Implement daily/weekly time targets with progress tracking and notifications when goals are met
@@ -70,3 +101,23 @@
 - Maintain backward compatibility throughout all refactoring
 - Ensure comprehensive test coverage for all new features
 - Update documentation with each major change
+
+## 📊 Current Status Summary
+
+**Version:** 2.1.0 (Released October 4, 2025)
+
+**Package Status:**
+- ✅ Published on PyPI as `drudge-cli`
+- ✅ Console command: `drudge`
+- ✅ GitHub: https://github.com/Trik16/drudge
+- ✅ Automated CI/CD with GitHub Actions
+- ✅ 39 comprehensive test cases (100% passing)
+
+**Recent Achievements (v2.1.0):**
+- Enhanced CLI with native help system
+- New clean command for worklog management
+- End command with --all flag for paused tasks
+- Complete documentation and release notes
+- Automated testing and publishing workflows
+
+**Next Major Milestone:** Version 2.2.0 - Configuration file support & Project categorization

@@ -21,9 +21,11 @@ logger = logging.getLogger(__name__)
 # Create Typer application
 app = typer.Typer(
     name="drudge",
-    help="Drudge CLI - A comprehensive work time tracking tool with task management, time tracking, and reporting features.",
+    help="🚀 Drudge CLI - A comprehensive work time tracking tool with task management, time tracking, and reporting features.",
     no_args_is_help=True,
-    rich_markup_mode="rich"
+    rich_markup_mode="rich",
+    add_completion=True,
+    pretty_exceptions_show_locals=False
 )
 
 # Global WorkLog instance - initialized on first command
@@ -50,20 +52,33 @@ def get_worklog() -> WorkLog:
 
 @app.command()
 def start(
-    task_name: str = typer.Argument(..., help="Name of the task to start"),
+    task_name: Optional[str] = typer.Argument(None, help="Name of the task to start (anonymous if omitted)"),
     time: Optional[str] = typer.Option(None, "--time", "-t", help="Custom start time in HH:MM format"),
-    force: bool = typer.Option(False, "--force", "-f", help="Force start by ending active tasks")
+    force: bool = typer.Option(False, "--force", "-f", help="Force start by ending active tasks"),
+    parallel: bool = typer.Option(False, "--parallel", "-p", help="Allow parallel tasks (don't auto-end active tasks)")
 ) -> None:
     """
     🚀 Start a new task or resume a paused one.
     
+    By default, starting a new task ends any active tasks (single-task mode).
+    Use --parallel to work on multiple tasks simultaneously.
+    Omit task name to start anonymous work session.
+    
     Examples:
-        worklog start "Fix bug #123"
-        worklog start "Review PR" --time 09:30
-        worklog start "Meeting" --force
+        drudge start "Fix bug #123"
+        drudge start                    # Anonymous work
+        drudge start "Review PR" --time 09:30
+        drudge start "Meeting" --parallel
+        drudge start "Task" --force     # End active tasks first
     """
     worklog = get_worklog()
-    success = worklog.start_task(task_name, custom_time=time, force=force)
+    
+    # Handle modes:
+    # - parallel=True: Allow concurrent tasks (don't auto-end)
+    # - parallel=False (default): Single-task mode (auto-end active tasks)
+    # force parameter is respected in both modes for explicit auto-ending
+    auto_end_mode = not parallel  # Single-task mode auto-ends
+    success = worklog.start_task(task_name, custom_time=time, force=force or auto_end_mode, parallel=parallel)
     
     if not success:
         raise typer.Exit(1)
@@ -71,21 +86,35 @@ def start(
 
 @app.command()
 def end(
-    task_name: str = typer.Argument(..., help="Name of the task to end"),
-    time: Optional[str] = typer.Option(None, "--time", "-t", help="Custom end time in HH:MM format")
+    task_name: Optional[str] = typer.Argument(None, help="Name of the task to end (omit to end all active tasks)"),
+    time: Optional[str] = typer.Option(None, "--time", "-t", help="Custom end time in HH:MM format"),
+    all: bool = typer.Option(False, "--all", "-a", help="End all active AND paused tasks")
 ) -> None:
     """
     🏁 End an active task and record completion.
     
+    Omit task name to end all active tasks.
+    Use --all to also end paused tasks (converting accumulated time to entries).
+    
     Examples:
-        worklog end "Fix bug #123"
-        worklog end "Review PR" --time 17:30
+        drudge end "Fix bug #123"
+        drudge end "Meeting" --time 17:30
+        drudge end                          # End all active tasks
+        drudge end --all                    # End all active AND paused tasks
     """
     worklog = get_worklog()
-    success = worklog.end_task(task_name, custom_time=time)
     
-    if not success:
-        raise typer.Exit(1)
+    # If --all flag is used, end all active AND paused tasks
+    if all:
+        worklog.end_all_tasks(custom_time=time, include_paused=True)
+    # If no task name provided, end all active tasks
+    elif task_name is None:
+        worklog.end_all_tasks(custom_time=time, include_paused=False)
+    # End specific task
+    else:
+        success = worklog.end_task(task_name, custom_time=time)
+        if not success:
+            raise typer.Exit(1)
 
 
 @app.command()
@@ -131,15 +160,6 @@ def resume(
 # ============================================================================
 
 @app.command()
-def status() -> None:
-    """
-    📊 Show current work status and active tasks.
-    """
-    worklog = get_worklog()
-    worklog.show_status()
-
-
-@app.command()
 def recent(
     limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Limit number of tasks shown")
 ) -> None:
@@ -160,12 +180,15 @@ def list(
     task: Optional[str] = typer.Option(None, "--task", "-t", help="Filter by task name")
 ) -> None:
     """
-    📋 List completed task entries with optional filtering.
+    📋 Show work status: active tasks, paused tasks, and completed entries.
+    
+    Without filters: Shows current status (active/paused tasks + today's count)
+    With filters: Shows filtered completed entries
     
     Examples:
-        worklog list
-        worklog list --date 2025-01-15
-        worklog list --task "bug" --limit 5
+        drudge list                      # Show current status
+        drudge list --date 2025-01-15    # Show tasks from specific date
+        drudge list --task "bug" --limit 5
     """
     worklog = get_worklog()
     worklog.list_entries(date=date, limit=limit, task_filter=task)
@@ -179,11 +202,66 @@ def daily(
     📅 Show daily work summary with time totals.
     
     Examples:
-        worklog daily
-        worklog daily --date 2025-01-15
+        drudge daily
+        drudge daily --date 2025-01-15
     """
     worklog = get_worklog()
     worklog.show_daily_summary(date=date)
+
+
+@app.command()
+def clean(
+    target: Optional[str] = typer.Argument(None, help="Date (YYYY-MM-DD) or task name to clean"),
+    date: Optional[str] = typer.Option(None, "--date", "-d", help="Filter by date when cleaning a task"),
+    all: bool = typer.Option(False, "--all", "-a", help="Clean all worklog entries")
+) -> None:
+    """
+    🗑️ Clean worklog entries by date, task, or all.
+    
+    Creates a backup before cleaning for safety.
+    
+    Examples:
+        drudge clean 2025-10-03              # Clean all entries for a date
+        drudge clean "Bug fix"               # Clean all entries for a task
+        drudge clean "Meeting" --date 2025-10-03  # Clean task entries for specific date
+        drudge clean --all                   # Clean all worklog entries
+    """
+    worklog = get_worklog()
+    
+    # Clean all entries
+    if all:
+        if target is not None:
+            console.print("❌ Cannot specify a target when using --all", style="red")
+            raise typer.Exit(1)
+        
+        # Confirm before cleaning all
+        console.print("⚠️  [yellow]This will clean ALL worklog entries![/yellow]")
+        confirm = typer.confirm("Are you sure you want to continue?")
+        if not confirm:
+            console.print("❌ Operation cancelled", style="dim")
+            raise typer.Exit(0)
+        
+        worklog.clean_all()
+        return
+    
+    # No target specified
+    if target is None:
+        console.print("❌ Please specify a date, task name, or use --all", style="red")
+        raise typer.Exit(1)
+    
+    # Check if target is a date (YYYY-MM-DD format)
+    import re
+    date_pattern = r'^\d{4}-\d{2}-\d{2}$'
+    
+    if re.match(date_pattern, target):
+        # Clean by date
+        if date is not None:
+            console.print("❌ Cannot use --date when target is already a date", style="red")
+            raise typer.Exit(1)
+        worklog.clean_by_date(target)
+    else:
+        # Clean by task name
+        worklog.clean_by_task(target, date=date)
 
 
 # ============================================================================
@@ -210,7 +288,7 @@ def version() -> None:
     📦 Show Drudge CLI version information.
     """
     console.print("🚀 Drudge CLI", style="bold blue")
-    console.print("Version: 2.0.0 (Refactored)")
+    console.print("Version: 2.1.0 (Enhanced CLI)")
     console.print("A comprehensive work time tracking and task management tool")
 
 

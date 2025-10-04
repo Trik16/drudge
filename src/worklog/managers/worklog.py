@@ -420,7 +420,7 @@ class WorkLog:
     # ============================================================================
     
     @auto_save
-    def start_task(self, task_name: str, custom_time: str = None, force: bool = False) -> bool:
+    def start_task(self, task_name: Optional[str] = None, custom_time: str = None, force: bool = False, parallel: bool = False) -> bool:
         """
         Start a new task or resume an existing one.
         
@@ -428,9 +428,10 @@ class WorkLog:
         with enhanced user experience and comprehensive error handling.
         
         Args:
-            task_name: Name of the task to start
+            task_name: Name of the task to start (None for anonymous work session)
             custom_time: Optional HH:MM format time (e.g., "09:30") to use instead of current time
             force: If True, automatically ends any currently active tasks
+            parallel: If True, allows starting task even when others are active (parallel mode)
             
         Returns:
             bool: True if task started successfully, False otherwise
@@ -439,17 +440,39 @@ class WorkLog:
             ValueError: If task name is invalid or time format is wrong
         """
         try:
-            # Validate inputs using centralized validation
-            if task_name is None:
-                raise ValueError("Task name cannot be None")
-            task_name = WorkLogValidator.validate_task_name(task_name)
+            # Handle anonymous work session
+            if task_name is None or task_name.strip() == "":
+                task_name = self.ANONYMOUS_TASK_NAME
+                console.print("💡 Starting anonymous work session", style="blue")
+            else:
+                # Validate inputs using centralized validation
+                task_name = WorkLogValidator.validate_task_name(task_name)
             timestamp = self._get_timestamp(custom_time)
             
             # Display formatted time for user confirmation
             display_time = self._format_display_time(timestamp)
             
-            # Check for existing active tasks
-            if self.data.active_tasks and not force:
+            # Special case: If anonymous work is active and user provides a task name, rename it
+            if (task_name != self.ANONYMOUS_TASK_NAME and 
+                self.ANONYMOUS_TASK_NAME in self.data.active_tasks and 
+                not parallel):
+                # Convert anonymous task to named task
+                anonymous_start_time = self.data.active_tasks[self.ANONYMOUS_TASK_NAME]
+                del self.data.active_tasks[self.ANONYMOUS_TASK_NAME]
+                self.data.active_tasks[task_name] = anonymous_start_time
+                
+                # Add to recent tasks
+                if task_name not in self.data.recent_tasks:
+                    self.data.recent_tasks.insert(0, task_name)
+                    if len(self.data.recent_tasks) > self.config.max_recent_tasks:
+                        self.data.recent_tasks = self.data.recent_tasks[:self.config.max_recent_tasks]
+                
+                console.print(f"✏️  Renamed anonymous work to '{task_name}'")
+                logger.info(f"Converted anonymous task to: {task_name}")
+                return True
+            
+            # Check for existing active tasks (skip if parallel mode)
+            if self.data.active_tasks and not force and not parallel:
                 active_list = ', '.join(self.data.active_tasks.keys())
                 console.print(
                     f"⚠️ Active tasks: {active_list}\n"
@@ -474,7 +497,8 @@ class WorkLog:
                 # Resume paused task
                 self.data.paused_tasks.remove(paused_task)
                 self.data.active_tasks[task_name] = timestamp
-                console.print(f"▶️ Resumed '{task_name}' at {display_time}")
+                display_name = "[ANONYMOUS WORK]" if task_name == self.ANONYMOUS_TASK_NAME else task_name
+                console.print(f"▶️ Resumed '{display_name}' at {display_time}")
                 logger.info(f"Task resumed: {task_name} at {timestamp}")
                 self._update_daily_file(task_name, "resume", timestamp)
                 return True
@@ -482,13 +506,15 @@ class WorkLog:
             # Start new task
             self.data.active_tasks[task_name] = timestamp
             
-            # Add to recent tasks (maintain max size)
-            if task_name not in self.data.recent_tasks:
+            # Add to recent tasks (maintain max size) - but not anonymous tasks
+            if task_name != self.ANONYMOUS_TASK_NAME and task_name not in self.data.recent_tasks:
                 self.data.recent_tasks.insert(0, task_name)
                 if len(self.data.recent_tasks) > self.config.max_recent_tasks:
                     self.data.recent_tasks = self.data.recent_tasks[:self.config.max_recent_tasks]
             
-            console.print(f"🚀 Started '{task_name}' at {display_time}")
+            # Display friendly name for output
+            display_name = "[ANONYMOUS WORK]" if task_name == self.ANONYMOUS_TASK_NAME else task_name
+            console.print(f"🚀 Started '{display_name}' at {display_time}")
             logger.info(f"Task started: {task_name} at {timestamp}")
             self._update_daily_file(task_name, "start", timestamp)
             return True
@@ -558,7 +584,8 @@ class WorkLog:
             self.data.entries.append(entry)
             del self.data.active_tasks[task_name]
             
-            console.print(f"🏁 Completed '{task_name}' at {display_end_time} (Duration: {duration})")
+            display_name = "[ANONYMOUS WORK]" if task_name == self.ANONYMOUS_TASK_NAME else task_name
+            console.print(f"🏁 Completed '{display_name}' at {display_end_time} (Duration: {duration})")
             logger.info(f"Task completed: {task_name}, duration: {duration}")
             
             # Update daily file with completion info
@@ -572,6 +599,58 @@ class WorkLog:
         except Exception as e:
             console.print(f"❌ Failed to end task: {e}", style="red")
             logger.error(f"Unexpected error ending task {task_name}: {e}")
+            return False
+    
+    @auto_save
+    def end_all_tasks(self, custom_time: str = None, include_paused: bool = False) -> bool:
+        """
+        End all currently active tasks, optionally including paused tasks.
+        
+        Convenience method to end all active tasks at once. Useful when
+        finishing work for the day or switching contexts.
+        
+        Args:
+            custom_time: Optional HH:MM format time for custom end time
+            include_paused: If True, also end all paused tasks
+            
+        Returns:
+            bool: True if at least one task was ended successfully, False otherwise
+        """
+        has_tasks = self.data.active_tasks or (include_paused and self.data.paused_tasks)
+        
+        if not has_tasks:
+            console.print("ℹ️  No tasks to end", style="blue")
+            return False
+        
+        # Get list of active tasks (copy to avoid modification during iteration)
+        active_task_names = list(self.data.active_tasks.keys())
+        paused_task_names = [p.task for p in self.data.paused_tasks] if include_paused else []
+        
+        total_tasks = len(active_task_names) + len(paused_task_names)
+        task_type = "active and paused" if include_paused else "active"
+        console.print(f"🏁 Ending {total_tasks} {task_type} task(s)...\n")
+        
+        ended_count = 0
+        
+        # End active tasks
+        for task_name in active_task_names:
+            if self.end_task(task_name, custom_time=custom_time):
+                ended_count += 1
+        
+        # End paused tasks if requested - need to resume them first then end
+        if include_paused:
+            for task_name in paused_task_names:
+                # Resume the paused task (this will make it active)
+                if self.resume_task(task_name, custom_time=custom_time):
+                    # Now end it
+                    if self.end_task(task_name, custom_time=custom_time):
+                        ended_count += 1
+        
+        if ended_count > 0:
+            console.print(f"\n✅ Ended {ended_count} task(s) successfully")
+            return True
+        else:
+            console.print("\n⚠️  Failed to end any tasks", style="yellow")
             return False
     
     @auto_save
@@ -723,31 +802,78 @@ class WorkLog:
     @requires_data
     def list_recent_tasks(self, limit: int = None) -> None:
         """
-        Display recent task names for quick reference and reuse.
+        Display recent completed task entries with full details.
+        Shows date, start time, task name, and duration for each entry.
         
         Args:
-            limit: Optional limit on number of tasks to show
+            limit: Optional limit on number of tasks to show (default: 10)
         """
-        if not self.data.recent_tasks:
-            console.print("📝 No recent tasks found", style="dim")
+        # Get completed entries only
+        completed_entries = [e for e in self.data.entries if e.end_time is not None]
+        
+        if not completed_entries:
+            console.print("📝 No completed tasks found", style="dim")
             return
         
-        display_limit = min(limit or self.config.max_recent_tasks, len(self.data.recent_tasks))
-        console.print("📝 Recent Tasks:", style="bold")
+        # Use limit or default to 10
+        display_limit = limit or 10
+        recent_entries = completed_entries[-display_limit:]
         
-        for i, task in enumerate(self.data.recent_tasks[:display_limit], 1):
-            console.print(f"  {i}. {task}")
+        console.print(f"📝 Recent {len(recent_entries)} Completed Tasks:", style="bold")
+        console.print()
+        
+        # Display in reverse order (most recent first)
+        for entry in reversed(recent_entries):
+            display_name = "[ANONYMOUS WORK]" if entry.task == self.ANONYMOUS_TASK_NAME else entry.task
+            date_part = entry.start_time[:10]  # YYYY-MM-DD
+            start_time = datetime.fromisoformat(entry.start_time).strftime("%H:%M")
+            
+            console.print(f"  {date_part} {start_time} {display_name} ({entry.duration})")
     
     @requires_data
     def list_entries(self, date: str = None, limit: int = None, task_filter: str = None) -> None:
         """
         List completed task entries with optional filtering.
+        Shows active tasks, paused tasks, and recent activity.
         
         Args:
             date: Optional date filter (YYYY-MM-DD format)
             limit: Optional limit on number of entries to show
             task_filter: Optional task name filter (partial match)
         """
+        # Show active tasks status first
+        if self.data.active_tasks:
+            console.print("🔥 [bold green]ACTIVE TASKS:[/bold green]")
+            current_time = self._get_current_timestamp()
+            for task_name, start_time in self.data.active_tasks.items():
+                display_name = "[ANONYMOUS WORK]" if task_name == self.ANONYMOUS_TASK_NAME else task_name
+                duration = self._format_duration(start_time, current_time)
+                formatted_start = self._format_display_time(start_time)
+                console.print(f"  • {display_name} - Started: {formatted_start} (Running: {duration})")
+        
+        # Show paused tasks
+        if self.data.paused_tasks:
+            console.print("\n⏸️  [bold yellow]PAUSED TASKS:[/bold yellow]")
+            for task in self.data.paused_tasks:
+                display_name = "[ANONYMOUS WORK]" if task.task == self.ANONYMOUS_TASK_NAME else task.task
+                console.print(f"  • {display_name}")
+        
+        # Show today's completed tasks count
+        if self.data.entries:
+            today = datetime.now().strftime("%Y-%m-%d")
+            today_entries = [e for e in self.data.entries if e.start_time.startswith(today)]
+            if today_entries:
+                console.print(f"\n📊 [bold]COMPLETED TODAY:[/bold] {len(today_entries)} tasks")
+        
+        # If only showing status (no filters), and there are active/paused tasks, stop here
+        if not date and not task_filter and not limit and (self.data.active_tasks or self.data.paused_tasks):
+            # When there are active/paused tasks, don't show completed entries unless explicitly filtered
+            return
+        
+        # No active tasks - show message and recent completed tasks
+        if not self.data.active_tasks and not self.data.paused_tasks:
+            console.print("ℹ️  [blue]NO ACTIVE OR PAUSED TASKS[/blue]\n")
+        
         entries = self.data.entries.copy()
         
         # Apply date filter
@@ -763,23 +889,26 @@ class WorkLog:
         if task_filter:
             entries = [e for e in entries if task_filter.lower() in e.task.lower()]
         
-        # Apply limit
-        if limit:
+        # If no filters applied, show only last 2 recent tasks
+        if not date and not task_filter and not limit:
+            entries = entries[-2:]  # Last 2 recent tasks
+        elif limit:
             entries = entries[-limit:]  # Show most recent if limited
         
         if not entries:
             filter_desc = f" (filtered: date={date}, task={task_filter})" if (date or task_filter) else ""
-            console.print(f"📋 No entries found{filter_desc}", style="dim")
+            console.print(f"📋 No completed tasks found{filter_desc}", style="dim")
             return
         
         # Display entries
-        console.print(f"📋 Task Entries ({len(entries)} found):", style="bold")
+        console.print(f"📋 Last {len(entries)} Completed Tasks:", style="bold")
         
         for entry in entries:
+            display_name = "[ANONYMOUS WORK]" if entry.task == self.ANONYMOUS_TASK_NAME else entry.task
             start_display = self._format_display_time(entry.start_time)
             end_display = self._format_display_time(entry.end_time)
             console.print(
-                f"  • {entry.task}\n"
+                f"  • {display_name}\n"
                 f"    {start_display} → {end_display} ({entry.duration})"
             )
     
@@ -837,3 +966,182 @@ class WorkLog:
             hours = seconds // 3600
             minutes = (seconds % 3600) // 60
             console.print(f"  • {task_name}: {hours:.0f}h {minutes:.0f}m")
+    
+    @requires_data
+    @auto_save
+    def clean_by_date(self, date: str) -> bool:
+        """
+        Clean/erase all entries for a specific date.
+        
+        Args:
+            date: Date to clean (YYYY-MM-DD format)
+            
+        Returns:
+            bool: True if entries were removed, False otherwise
+        """
+        # Validate date format
+        try:
+            WorkLogValidator.validate_date_format(date, self.config)
+        except ValueError as e:
+            console.print(f"❌ Invalid date format: {e}", style="red")
+            return False
+        
+        # Find entries for the date
+        entries_to_remove = [e for e in self.data.entries if e.start_time.startswith(date)]
+        
+        if not entries_to_remove:
+            console.print(f"ℹ️  No entries found for {date}", style="dim")
+            return False
+        
+        # Create backup before cleaning
+        from ..managers.backup import BackupManager
+        daily_file = self.worklog_dir / f"{date}.txt"
+        BackupManager.create_backup(
+            self.worklog_dir,
+            f"clean_{date}",
+            entries_to_remove,
+            daily_file if daily_file.exists() else None,
+            self.config
+        )
+        
+        # Remove entries from data
+        self.data.entries = [e for e in self.data.entries if not e.start_time.startswith(date)]
+        
+        # Remove daily file if exists
+        if daily_file.exists():
+            daily_file.unlink()
+        
+        console.print(f"✅ Cleaned {len(entries_to_remove)} entries for {date}", style="green")
+        console.print("💾 Backup created for safety", style="dim")
+        return True
+    
+    @requires_data
+    @auto_save
+    def clean_by_task(self, task_name: str, date: Optional[str] = None) -> bool:
+        """
+        Clean/erase entries for a specific task, optionally filtered by date.
+        
+        Args:
+            task_name: Name of the task to clean
+            date: Optional date filter (YYYY-MM-DD format)
+            
+        Returns:
+            bool: True if entries were removed, False otherwise
+        """
+        # Validate date if provided
+        if date:
+            try:
+                WorkLogValidator.validate_date_format(date, self.config)
+            except ValueError as e:
+                console.print(f"❌ Invalid date format: {e}", style="red")
+                return False
+        
+        # Find entries to remove
+        if date:
+            entries_to_remove = [e for e in self.data.entries 
+                               if e.task == task_name and e.start_time.startswith(date)]
+        else:
+            entries_to_remove = [e for e in self.data.entries if e.task == task_name]
+        
+        if not entries_to_remove:
+            filter_msg = f" on {date}" if date else ""
+            console.print(f"ℹ️  No entries found for task '{task_name}'{filter_msg}", style="dim")
+            return False
+        
+        # Create backup before cleaning
+        from ..managers.backup import BackupManager
+        backup_date = date or "all_dates"
+        BackupManager.create_backup(
+            self.worklog_dir,
+            f"clean_{backup_date}_{task_name.replace(' ', '_')}",
+            entries_to_remove,
+            None,
+            self.config
+        )
+        
+        # Remove entries from data
+        if date:
+            self.data.entries = [e for e in self.data.entries 
+                               if not (e.task == task_name and e.start_time.startswith(date))]
+        else:
+            self.data.entries = [e for e in self.data.entries if e.task != task_name]
+        
+        # Rebuild affected daily files
+        affected_dates = set(e.start_time[:10] for e in entries_to_remove)
+        for affected_date in affected_dates:
+            daily_file = self.worklog_dir / f"{affected_date}.txt"
+            # Get remaining entries for this date
+            remaining_entries = [e for e in self.data.entries if e.start_time.startswith(affected_date)]
+            
+            if remaining_entries:
+                # Rebuild daily file with remaining entries
+                daily_file.write_text("")  # Clear file
+                for entry in remaining_entries:
+                    # Determine action based on entry state
+                    if entry.end_time and entry.duration:
+                        # Completed entry
+                        formatted_entry = self.daily_file_manager.format_entry(
+                            entry.task,
+                            'completed',
+                            entry.end_time,
+                            entry.duration
+                        )
+                    else:
+                        # Active entry (shouldn't happen in clean context, but handle it)
+                        formatted_entry = self.daily_file_manager.format_entry(
+                            entry.task,
+                            'start',
+                            entry.start_time
+                        )
+                    self.daily_file_manager.add_entry_chronologically(daily_file, formatted_entry)
+            elif daily_file.exists():
+                # No entries left for this date, remove daily file
+                daily_file.unlink()
+        
+        filter_msg = f" on {date}" if date else ""
+        console.print(f"✅ Cleaned {len(entries_to_remove)} entries for task '{task_name}'{filter_msg}", style="green")
+        console.print("💾 Backup created for safety", style="dim")
+        return True
+    
+    @requires_data
+    @auto_save
+    def clean_all(self) -> bool:
+        """
+        Clean all worklog entries and daily files.
+        
+        Returns:
+            bool: True if entries were removed, False otherwise
+        """
+        if not self.data.entries:
+            console.print("ℹ️  No entries to clean", style="dim")
+            return False
+        
+        # Create comprehensive backup of all entries
+        from ..managers.backup import BackupManager
+        BackupManager.create_backup(
+            self.worklog_dir,
+            "all_entries",
+            self.data.entries,
+            None,
+            self.config
+        )
+        
+        # Count entries
+        entry_count = len(self.data.entries)
+        
+        # Clear all data
+        self.data.entries = []
+        self.data.active_tasks = {}
+        self.data.paused_tasks = []
+        
+        # Remove all daily files
+        daily_files = list(self.worklog_dir.glob("*.txt"))
+        removed_files = 0
+        for daily_file in daily_files:
+            if daily_file.name != "worklog.log":  # Don't remove log file
+                daily_file.unlink()
+                removed_files += 1
+        
+        console.print(f"✅ Cleaned {entry_count} entries and {removed_files} daily files", style="green")
+        console.print("💾 Backup created for safety", style="dim")
+        return True
