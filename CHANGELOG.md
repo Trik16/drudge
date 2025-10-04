@@ -2,6 +2,16 @@
 
 All notable changes to drudge-cli will be documented in this file.
 
+## [2.1.1] - 2025-10-04
+
+### Fixed
+- Updated README.md with corrected GitHub links for CHANGELOG and release notes
+- Links now properly point to GitHub repository instead of relative paths
+
+### Changed
+- Version command now imports `__version__` from `__init__.py` instead of hardcoding it
+- Single source of truth for version number across the codebase
+
 ## [2.1.0] - 2025-10-04
 
 ### Added

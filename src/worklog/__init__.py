@@ -27,7 +27,7 @@ from .validators import WorkLogValidator
 from .managers import WorkLog, BackupManager, DailyFileManager
 from .cli import main
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 __author__ = "Drudge Development Team"
 __description__ = "Drudge CLI - A comprehensive work time tracking tool"
 

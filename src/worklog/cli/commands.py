@@ -13,6 +13,7 @@ from rich.console import Console
 
 from ..managers.worklog import WorkLog
 from ..config import WorkLogConfig
+from .. import __version__
 
 # Initialize Rich console and logger
 console = Console()
@@ -288,7 +289,7 @@ def version() -> None:
     📦 Show Drudge CLI version information.
     """
     console.print("🚀 Drudge CLI", style="bold blue")
-    console.print("Version: 2.1.0 (Enhanced CLI)")
+    console.print(f"Version: {__version__} (Enhanced CLI)")
     console.print("A comprehensive work time tracking and task management tool")
 
 

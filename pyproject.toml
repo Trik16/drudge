@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "drudge-cli"
-version = "2.1.0"
+version = "2.1.1"
 description = "🚀 A powerful work time tracking tool for the command line"
 readme = "README.md"
 authors = [
