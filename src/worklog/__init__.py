@@ -21,15 +21,16 @@ Usage:
     worklog.start_task("My Task")
 """
 
+# Version must be defined before importing .cli to avoid circular import
+__version__ = "2.1.1"
+__author__ = "Drudge Development Team"
+__description__ = "Drudge CLI - A comprehensive work time tracking tool"
+
 from .config import WorkLogConfig
 from .models import TaskEntry, PausedTask, WorkLogData
 from .validators import WorkLogValidator
 from .managers import WorkLog, BackupManager, DailyFileManager
 from .cli import main
-
-__version__ = "2.1.1"
-__author__ = "Drudge Development Team"
-__description__ = "Drudge CLI - A comprehensive work time tracking tool"
 
 __all__ = [
     'WorkLog',
