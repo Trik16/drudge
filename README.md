@@ -394,8 +394,8 @@ MIT License - See [LICENSE](LICENSE) file for details
 
 - **GitHub**: [github.com/Trik16/drudge](https://github.com/Trik16/drudge)
 - **PyPI**: [pypi.org/project/drudge-cli](https://pypi.org/project/drudge-cli/)
-- **Changelog**: [CHANGELOG.md](CHANGELOG.md)
-- **Release Notes**: [docs/RELEASE_2.1.0.md](docs/RELEASE_2.1.0.md)
+- **Changelog**: [CHANGELOG.md](https://github.com/Trik16/drudge/blob/main/CHANGELOG.md)
+- **Release Notes**: [docs/RELEASE_2.1.0.md](https://github.com/Trik16/drudge/blob/main/docs/RELEASE_2.1.0.md)
 
 ## 🙏 Contributing
 
