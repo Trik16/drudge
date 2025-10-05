@@ -91,6 +91,155 @@ drudge end "Morning emails"
 drudge daily
 ```
 
+## ⚙️ Configuration
+
+### Config File
+
+Drudge can be configured using a YAML file located at `~/.worklog/config.yaml`. This allows you to customize behavior, define project categories, and enable integrations like **Haunts** (Google Calendar sync).
+
+### Creating Configuration
+
+```bash
+# Interactive setup wizard (recommended)
+drudge config --setup
+
+# Show current configuration
+drudge config --show
+
+# Edit configuration file
+drudge config --edit
+```
+
+The `--setup` wizard will:
+- Detect existing **Haunts** installation
+- Import Google Sheet document ID automatically
+- Guide you through project categorization
+- Configure sync preferences
+
+### Configuration Structure
+
+```yaml
+# Basic settings
+worklog_directory: "~/.worklog"
+sheet_document_id: "1A2B3C4D5E6F7G8H9I0J"
+timezone: "Europe/Rome"
+
+# Project categorization
+projects:
+  - Backend
+  - Frontend
+  - DevOps
+  - Research
+
+# Google Sheets sync (haunts-compatible format)
+google_sheets:
+  enabled: true
+  auto_sync: false
+  round_hours: 0.5      # Round to 15min (0.25), 30min (0.5), hour (1.0)
+
+# Optional: Haunts integration (for Calendar sync)
+haunts:
+  enabled: false
+  config_path: "~/.haunts"
+```
+
+### Configuration Parameters
+
+#### Basic Settings
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `worklog_directory` | string | `~/.worklog` | Directory for worklog data |
+| `sheet_document_id` | string | - | Google Sheets document ID (shared) |
+| `timezone` | string | system | Timezone (from haunts or system) |
+
+#### Projects
+
+Define project categories to organize your work entries. Projects can be assigned when starting tasks:
+
+```bash
+# Start a task with project categorization
+drudge start "Implement login feature" --project Backend
+drudge start "Fix CSS layout" --project Frontend
+```
+
+#### Google Sheets Integration
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable/disable Google Sheets sync |
+| `auto_sync` | boolean | `false` | Auto-sync on task end |
+| `round_hours` | float | `0.5` | Rounding: 0.25 (15min), 0.5 (30min), 1.0 (hour) |
+
+**Note:** Decimal places are automatic: 0.25→2 decimals, 0.5→1 decimal, 1.0→0 decimals
+
+#### Haunts Integration (Optional)
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enabled` | boolean | `false` | Whether you use haunts for Calendar sync |
+| `config_path` | string | `~/.haunts` | Path to haunts config (reference only) |
+
+**Note:** Haunts is optional. If enabled, it reads the Google Sheet and creates Calendar events independently.
+
+#### Hours Formatting Examples
+
+The `round_hours` setting controls how task durations are rounded. Decimal places are automatic:
+
+```yaml
+# Example 1: Round to 30 minutes (default)
+round_hours: 0.5
+# 2h 12m → 2,0 hours (2h 00m) - 1 decimal
+# 2h 38m → 2,5 hours (2h 30m) - 1 decimal
+# 2h 52m → 3,0 hours (3h 00m) - 1 decimal
+
+# Example 2: Round to 15 minutes  
+round_hours: 0.25
+# 2h 12m → 2,25 hours (2h 15m) - 2 decimals
+# 2h 38m → 2,50 hours (2h 30m) - 2 decimals
+# 2h 52m → 2,75 hours (2h 45m) - 2 decimals
+
+# Example 3: Round to full hour
+round_hours: 1.0
+# 2h 12m → 2 hours - 0 decimals
+# 2h 38m → 3 hours - 0 decimals
+```
+
+**Note:** Uses comma (`,`) as decimal separator for European format.
+
+### Project-Based Workflow
+
+Once configured, you can organize your work by project:
+
+```bash
+# Start tasks with project categorization
+drudge start "API refactoring" --project Backend
+drudge start "Button animations" --project Frontend
+
+# Tasks are tracked with their projects
+drudge list
+# Output shows: "API refactoring [Backend]" and "Button animations [Frontend]"
+
+# End tasks (project info is preserved)
+drudge end "API refactoring"
+# Output: 🏁 Completed 'API refactoring' [Backend] (2h 30m)
+```
+
+### Haunts Sync
+
+When enabled, drudge can sync completed tasks to Google Calendar via Haunts:
+
+```bash
+# Manual sync (when sync_mode: manual)
+drudge daily --sync
+
+# View what will be synced
+drudge daily
+# Shows completed tasks with their projects and durations
+```
+
+**Note**: Haunts integration requires the [Haunts](https://github.com/yourusername/haunts) package to be installed and configured.
+
 ## 📖 Command Reference
 
 | Command | Description | Example |
@@ -99,6 +248,7 @@ drudge daily
 | `drudge start "Name"` | 🚀 Start a new task (auto-ends previous) | `drudge start "Bug fix #123"` |
 | `drudge start` | 🚀 Start anonymous work session | `drudge start` |
 | `drudge start --parallel` | 🚀 Start without ending active tasks | `drudge start "Review" --parallel` |
+| `drudge start --project NAME` | 🚀 Start with project categorization | `drudge start "API work" --project Backend` |
 | `drudge start --time HH:MM` | 🚀 Start at specific time | `drudge start "Meeting" --time 09:30` |
 | `drudge end "Name"` | 🏁 End a specific task | `drudge end "Bug fix #123"` |
 | `drudge end` | 🏁 End ALL active tasks (paused remain) | `drudge end` |
@@ -123,7 +273,11 @@ drudge daily
 | **Help & Info** | | |
 | `drudge --help` | ❓ **IMPROVED** Main help | `drudge --help` |
 | `drudge COMMAND --help` | ❓ **IMPROVED** Command help | `drudge start --help` |
-| `drudge config` | ⚙️ Show configuration | `drudge config` |
+| **Configuration** | | |
+| `drudge config` | ⚙️ Show configuration help | `drudge config` |
+| `drudge config --setup` | ⚙️ **NEW** Interactive setup wizard | `drudge config --setup` |
+| `drudge config --show` | ⚙️ **NEW** Display current config | `drudge config --show` |
+| `drudge config --edit` | ⚙️ **NEW** Edit config file | `drudge config --edit` |
 | `drudge version` | 📦 Show version | `drudge version` |
 
 ## 💡 Usage Examples
@@ -272,6 +426,157 @@ $ drudge daily
 # View specific date
 $ drudge daily --date 2025-10-03
 ```
+
+### Project-Based Workflow (v2.1.1+)
+
+```bash
+# First, set up configuration with projects
+$ drudge config --setup
+# Follow the wizard to configure projects
+
+# Start tasks with project categorization
+$ drudge start "Implement login API" --project Backend
+🚀 Started 'Implement login API' [Backend] at 2025-10-04 10:00:00
+
+$ drudge start "Fix responsive design" --project Frontend --parallel
+🚀 Started 'Fix responsive design' [Frontend] at 2025-10-04 10:30:00
+
+# List shows projects
+$ drudge list
+🔥 ACTIVE TASKS:
+  • Implement login API [Backend] (Running: 02:00:00)
+  • Fix responsive design [Frontend] (Running: 01:30:00)
+
+# End tasks (project info is preserved)
+$ drudge end "Implement login API"
+🏁 Completed 'Implement login API' [Backend] (Duration: 02:00:00)
+
+$ drudge end "Fix responsive design"
+🏁 Completed 'Fix responsive design' [Frontend] (Duration: 01:30:00)
+
+# Daily summary shows projects
+$ drudge daily
+📅 Daily Summary for 2025-10-04
+📊 Total: 2 tasks, 3h 30m
+
+  • Implement login API [Backend]: 2h 00m
+  • Fix responsive design [Frontend]: 1h 30m
+
+# Sync to Google Calendar (with Haunts integration)
+$ drudge daily --sync
+✅ Synced 2 tasks to Google Calendar
+```
+
+## 📊 Google Sheets Integration
+
+Drudge can sync your work tasks to Google Sheets in a **haunts-compatible format**. This allows you to:
+- Keep a time-tracking spreadsheet
+- Sync to Google Calendar (if using [haunts](https://github.com/keul/haunts))
+- Share work reports with your team
+
+### Quick Setup
+
+1. **Create or use existing Google Sheet**
+2. **Run config wizard:**
+   ```bash
+   drudge config --setup
+   # Enable Google Sheets sync
+   # Enter your Sheet Document ID
+   # Configure formatting preferences
+   ```
+
+3. **Sync your tasks:**
+   ```bash
+   drudge sync              # Sync all entries
+   drudge sync --daily      # Sync today's entries
+   drudge sync --monthly    # Sync current month
+   drudge daily --sync      # Alias for --daily
+   ```
+
+### Sheet Structure
+
+Your Google Spreadsheet should have:
+
+**1. Config Sheet** (name: `config`)
+- Maps project names to Calendar IDs (optional for drudge, required for haunts)
+
+**2. Monthly Sheets** (names: `January`, `February`, `March`, etc.)
+- Auto-created based on task dates
+- Contains your task entries
+
+**Monthly Sheet Columns:**
+
+| Column | Name | Description | Example |
+|--------|------|-------------|---------|
+| A | Date | Task date | `04/10/2025` |
+| B | Start time | Task start time | `09:30` |
+| C | Project | Project category | `Backend` |
+| D | Activity | Task description | `Implement login API` |
+| E | Details | Additional notes | `Added JWT auth` |
+| F | Spent | Duration (decimal hours) | `2,5` |
+| G | Event id | Calendar event ID (filled by haunts) | - |
+| H | Link | Calendar event link (filled by haunts) | - |
+| I | Action | Sync control (used by haunts) | - |
+
+### Example Data
+
+**Task in drudge:**
+```bash
+drudge start "Implement login API" --project Backend
+# ... work for 2h 30m ...
+drudge end "Implement login API"
+```
+
+**Synced to Google Sheet (October tab):**
+```
+| Date       | Start | Project | Activity             | Spent |
+|------------|-------|---------|---------------------|-------|
+| 04/10/2025 | 09:00 | Backend | Implement login API | 2,5   |
+```
+
+### Hours Formatting
+
+Configure how hours are formatted in the sheet:
+
+```yaml
+google_sheets:
+  hours_decimal: 1      # Decimal places (0, 1, or 2)
+  round_hours: 0.25     # Round to 15min (0.25), 30min (0.5), or hour (1.0)
+```
+
+**Examples:**
+- Task: 2h 47m
+- `hours_decimal: 1, round_hours: 0.25` → `2,75` (2h 45m)
+- `hours_decimal: 2, round_hours: 0.5` → `2,50` (2h 30m)  
+- `hours_decimal: 0, round_hours: 1.0` → `3` (3h)
+
+### Haunts Integration (Optional)
+
+If you use **haunts** for Calendar sync:
+
+1. **Drudge** → Writes tasks to Google Sheet
+2. **Haunts** → Reads sheet and creates Calendar events
+3. **Haunts** → Fills `Event id` and `Link` columns
+
+**Without haunts:**
+- You still get a time-tracking spreadsheet
+- No automatic calendar sync
+- Perfect for manual reporting
+
+### Authentication Setup
+
+To use Google Sheets sync, you need:
+
+1. **Google Cloud Project** with Sheets API enabled
+2. **OAuth 2.0 credentials** or service account
+3. **Credentials file** at `~/.worklog/credentials.json`
+
+See [Google Sheets API Quickstart](https://developers.google.com/sheets/api/quickstart/python) for detailed setup.
+
+### Complete Documentation
+
+For detailed sheet structure, column specifications, and setup guides, see:
+- 📄 [Google Sheets Structure Documentation](docs/GOOGLE_SHEETS_STRUCTURE.md)
 
 ## 🏗️ Architecture
 

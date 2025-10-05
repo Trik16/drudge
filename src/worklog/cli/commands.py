@@ -89,19 +89,22 @@ def start(
 def end(
     task_name: Optional[str] = typer.Argument(None, help="Name of the task to end (omit to end all active tasks)"),
     time: Optional[str] = typer.Option(None, "--time", "-t", help="Custom end time in HH:MM format"),
-    all: bool = typer.Option(False, "--all", "-a", help="End all active AND paused tasks")
+    all: bool = typer.Option(False, "--all", "-a", help="End all active AND paused tasks"),
+    sync: bool = typer.Option(False, "--sync", "-s", help="Automatically sync to Google Sheets after ending task(s)")
 ) -> None:
     """
     🏁 End an active task and record completion.
     
     Omit task name to end all active tasks.
     Use --all to also end paused tasks (converting accumulated time to entries).
+    Use --sync to automatically sync completed tasks to Google Sheets.
     
     Examples:
         drudge end "Fix bug #123"
         drudge end "Meeting" --time 17:30
         drudge end                          # End all active tasks
         drudge end --all                    # End all active AND paused tasks
+        drudge end "Review PR" --sync       # End task and sync to Google Sheets
     """
     worklog = get_worklog()
     
@@ -116,6 +119,31 @@ def end(
         success = worklog.end_task(task_name, custom_time=time)
         if not success:
             raise typer.Exit(1)
+    
+    # Auto-sync if requested via --sync flag OR enabled in config
+    config = worklog.config
+    should_sync = sync or config.google_sheets.auto_sync
+    
+    if should_sync:
+        # Check if sync is properly configured
+        if not config.google_sheets.enabled:
+            console.print("⚠️  [yellow]Google Sheets sync is not enabled - skipping sync[/yellow]")
+            console.print("💡 Enable it in config.yaml: google_sheets.enabled = true", style="dim")
+        elif not config.sheet_document_id:
+            console.print("⚠️  [yellow]Google Sheets document ID not configured - skipping sync[/yellow]")
+            console.print("💡 Set it in config.yaml: sheet_document_id = 'your-sheet-id'", style="dim")
+        else:
+            try:
+                from ..sync.sheets import GoogleSheetsSync
+                
+                console.print("\n🔄 Syncing to Google Sheets...", style="dim")
+                sheets_sync = GoogleSheetsSync(config)
+                result = sheets_sync.sync_daily()
+                console.print(f"✅ Synced {result['count']} task(s) to Google Sheets", style="green")
+            except Exception as e:
+                console.print(f"❌ Sync failed: {e}", style="red")
+                logger.exception("Error during auto-sync")
+                console.print("💡 You can sync manually later with: drudge sync", style="dim")
 
 
 @app.command()
@@ -197,17 +225,129 @@ def list(
 
 @app.command()
 def daily(
-    date: Optional[str] = typer.Option(None, "--date", "-d", help="Date for summary (YYYY-MM-DD)")
+    date: Optional[str] = typer.Option(None, "--date", "-d", help="Date for summary (YYYY-MM-DD)"),
+    sync: bool = typer.Option(False, "--sync", "-s", help="Sync today's tasks to Google Sheets after showing summary")
 ) -> None:
     """
     📅 Show daily work summary with time totals.
     
+    Use --sync to automatically sync today's tasks to Google Sheets after showing the summary.
+    
     Examples:
         drudge daily
         drudge daily --date 2025-01-15
+        drudge daily --sync              # Show summary and sync to Google Sheets
     """
     worklog = get_worklog()
     worklog.show_daily_summary(date=date)
+    
+    # Auto-sync today's tasks if requested
+    if sync:
+        from ..sync.sheets import GoogleSheetsSync
+        
+        config = worklog.config
+        
+        # Check if sync is properly configured
+        if not config.google_sheets.enabled:
+            console.print("\n⚠️  [yellow]Google Sheets sync is not enabled - skipping sync[/yellow]")
+            console.print("💡 Enable it in config.yaml: google_sheets.enabled = true", style="dim")
+        elif not config.sheet_document_id:
+            console.print("\n⚠️  [yellow]Google Sheets document ID not configured - skipping sync[/yellow]")
+            console.print("💡 Set it in config.yaml: sheet_document_id = 'your-sheet-id'", style="dim")
+        else:
+            try:
+                console.print("\n🔄 Syncing today's tasks to Google Sheets...", style="dim")
+                sheets_sync = GoogleSheetsSync(config)
+                result = sheets_sync.sync_daily()
+                console.print(f"✅ Synced {result['count']} task(s) to Google Sheets", style="green")
+            except Exception as e:
+                console.print(f"\n❌ Sync failed: {e}", style="red")
+                logger.exception("Error during daily sync")
+                console.print("💡 You can sync manually with: drudge sync --daily", style="dim")
+
+
+@app.command()
+def sync(
+    daily: bool = typer.Option(False, "--daily", "-d", help="Sync only today's tasks"),
+    monthly: bool = typer.Option(False, "--monthly", "-m", help="Sync current month's tasks"),
+    date: Optional[str] = typer.Option(None, "--date", help="Sync tasks from specific date (YYYY-MM-DD)"),
+    test: bool = typer.Option(False, "--test", "-t", help="Test sync without writing (dry-run)")
+) -> None:
+    """
+    🔄 Sync worklog entries to Google Sheets.
+    
+    By default, syncs all completed tasks.
+    Use flags to filter which tasks to sync.
+    
+    Examples:
+        drudge sync                  # Sync all tasks
+        drudge sync --daily          # Sync only today's tasks
+        drudge sync --monthly        # Sync current month's tasks
+        drudge sync --date 2025-10-03  # Sync tasks from specific date
+        drudge sync --test           # Test sync without writing to sheet
+    """
+    from ..sync.sheets import GoogleSheetsSync
+    
+    worklog = get_worklog()
+    config = worklog.config
+    
+    # Check if Google Sheets sync is enabled
+    if not config.google_sheets.enabled:
+        console.print("❌ Google Sheets sync is not enabled in configuration", style="red")
+        console.print("💡 Enable it in config.yaml: google_sheets.enabled = true", style="dim")
+        raise typer.Exit(1)
+    
+    # Check if sheet document ID is configured
+    if not config.sheet_document_id:
+        console.print("❌ Google Sheets document ID is not configured", style="red")
+        console.print("💡 Set it in config.yaml: sheet_document_id = 'your-sheet-id'", style="dim")
+        raise typer.Exit(1)
+    
+    # Validate conflicting options
+    option_count = sum([daily, monthly, date is not None])
+    if option_count > 1:
+        console.print("❌ Cannot use --daily, --monthly, and --date together", style="red")
+        console.print("💡 Choose only one filtering option", style="dim")
+        raise typer.Exit(1)
+    
+    try:
+        # Initialize Google Sheets sync
+        sheets_sync = GoogleSheetsSync(config)
+        
+        # Determine sync mode
+        if test:
+            console.print("🧪 [yellow]TEST MODE: No data will be written to Google Sheets[/yellow]\n")
+        
+        if daily:
+            console.print("📅 Syncing today's tasks to Google Sheets...")
+            result = sheets_sync.sync_daily(dry_run=test)
+        elif monthly:
+            console.print("📆 Syncing current month's tasks to Google Sheets...")
+            result = sheets_sync.sync_monthly(dry_run=test)
+        elif date:
+            console.print(f"📅 Syncing tasks from {date} to Google Sheets...")
+            result = sheets_sync.sync_date(date, dry_run=test)
+        else:
+            console.print("🔄 Syncing all tasks to Google Sheets...")
+            result = sheets_sync.sync_all(dry_run=test)
+        
+        # Display results
+        if test:
+            console.print(f"\n✅ [green]Test completed:[/green] Would sync {result['count']} tasks", style="bold")
+        else:
+            console.print(f"\n✅ [green]Successfully synced {result['count']} tasks to Google Sheets[/green]", style="bold")
+        
+        if result.get('sheets_updated'):
+            console.print(f"📊 Updated sheets: {', '.join(result['sheets_updated'])}", style="dim")
+        
+    except FileNotFoundError as e:
+        console.print(f"❌ Credentials file not found: {e}", style="red")
+        console.print("💡 Place your Google Sheets credentials JSON file in the expected location", style="dim")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"❌ Sync failed: {e}", style="red")
+        logger.exception("Error during Google Sheets sync")
+        raise typer.Exit(1)
 
 
 @app.command()

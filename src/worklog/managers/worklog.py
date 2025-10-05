@@ -202,7 +202,8 @@ class WorkLog:
                 entries=entries,
                 active_tasks=raw_data.get('active_tasks', {}),
                 paused_tasks=paused_tasks,
-                recent_tasks=raw_data.get('recent_tasks', [])
+                recent_tasks=raw_data.get('recent_tasks', []),
+                active_task_projects=raw_data.get('active_task_projects', {})
             )
             
         except json.JSONDecodeError as e:
@@ -251,7 +252,8 @@ class WorkLog:
             'entries': [entry.__dict__ for entry in self.data.entries],
             'active_tasks': self.data.active_tasks,
             'paused_tasks': [task.__dict__ for task in self.data.paused_tasks],
-            'recent_tasks': self.data.recent_tasks
+            'recent_tasks': self.data.recent_tasks,
+            'active_task_projects': self.data.active_task_projects
         }
         
         # Atomic write: write to temp file then rename
@@ -420,7 +422,7 @@ class WorkLog:
     # ============================================================================
     
     @auto_save
-    def start_task(self, task_name: Optional[str] = None, custom_time: str = None, force: bool = False, parallel: bool = False) -> bool:
+    def start_task(self, task_name: Optional[str] = None, custom_time: str = None, force: bool = False, parallel: bool = False, project: Optional[str] = None) -> bool:
         """
         Start a new task or resume an existing one.
         
@@ -432,6 +434,7 @@ class WorkLog:
             custom_time: Optional HH:MM format time (e.g., "09:30") to use instead of current time
             force: If True, automatically ends any currently active tasks
             parallel: If True, allows starting task even when others are active (parallel mode)
+            project: Optional project/category name for task organization
             
         Returns:
             bool: True if task started successfully, False otherwise
@@ -506,6 +509,10 @@ class WorkLog:
             # Start new task
             self.data.active_tasks[task_name] = timestamp
             
+            # Store project assignment if provided
+            if project:
+                self.data.active_task_projects[task_name] = project
+            
             # Add to recent tasks (maintain max size) - but not anonymous tasks
             if task_name != self.ANONYMOUS_TASK_NAME and task_name not in self.data.recent_tasks:
                 self.data.recent_tasks.insert(0, task_name)
@@ -514,8 +521,9 @@ class WorkLog:
             
             # Display friendly name for output
             display_name = "[ANONYMOUS WORK]" if task_name == self.ANONYMOUS_TASK_NAME else task_name
-            console.print(f"🚀 Started '{display_name}' at {display_time}")
-            logger.info(f"Task started: {task_name} at {timestamp}")
+            project_info = f" [{project}]" if project else ""
+            console.print(f"🚀 Started '{display_name}'{project_info} at {display_time}")
+            logger.info(f"Task started: {task_name} (project: {project or 'none'}) at {timestamp}")
             self._update_daily_file(task_name, "start", timestamp)
             return True
             
@@ -572,20 +580,29 @@ class WorkLog:
             duration = self._format_duration(start_time, end_timestamp)
             display_end_time = self._format_display_time(end_timestamp)
             
+            # Get project for this task
+            task_project = self.data.active_task_projects.get(task_name)
+            
             # Create task entry
             entry = TaskEntry(
                 task=task_name,
                 start_time=start_time,
                 end_time=end_timestamp,
-                duration=duration
+                duration=duration,
+                project=task_project
             )
             
             # Update data structures
             self.data.entries.append(entry)
             del self.data.active_tasks[task_name]
             
+            # Remove project tracking
+            if task_name in self.data.active_task_projects:
+                del self.data.active_task_projects[task_name]
+            
             display_name = "[ANONYMOUS WORK]" if task_name == self.ANONYMOUS_TASK_NAME else task_name
-            console.print(f"🏁 Completed '{display_name}' at {display_end_time} (Duration: {duration})")
+            project_info = f" [{task_project}]" if task_project else ""
+            console.print(f"🏁 Completed '{display_name}'{project_info} at {display_end_time} (Duration: {duration})")
             logger.info(f"Task completed: {task_name}, duration: {duration}")
             
             # Update daily file with completion info

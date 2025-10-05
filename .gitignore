@@ -8,3 +8,6 @@ dist/
 src/drudge.egg-info/    
 src/drudge_cli.egg-info/
 *.pyc
+
+# Symbolic links to external projects
+haunts
