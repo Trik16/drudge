@@ -2,6 +2,20 @@
 
 All notable changes to drudge-cli will be documented in this file.
 
+## [2.2.1] - 2025-12-03
+
+### Added
+- **Auto-generated config file**: `~/.worklog/config.yaml` is now automatically created from template on first run
+- **`drudge config --show`**: New option to display full config.yaml content with syntax highlighting
+- **Config file included in package**: `config.yaml.example` now bundled with pip installation
+
+### Changed
+- **`drudge config`**: Now shows config summary including Google Sheets status and file location
+- **README updated**: Removed references to non-existent `--setup` and `--edit` options
+
+### Fixed
+- **Config file creation**: Previously config.yaml was never created, only loaded if it existed
+
 ## [2.2.0] - 2025-12-03
 
 ### Added

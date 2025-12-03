@@ -418,17 +418,46 @@ def clean(
 # ============================================================================
 
 @app.command()
-def config() -> None:
+def config(
+    show: bool = typer.Option(False, "--show", "-s", help="Show full config.yaml content"),
+) -> None:
     """
     ⚙️ Show current configuration settings.
+    
+    By default shows a summary. Use --show to display the full config.yaml file.
+    
+    Examples:
+        drudge config           # Show config summary
+        drudge config --show    # Show full config.yaml content
     """
-    worklog = get_worklog()
-    console.print("⚙️ Drudge CLI Configuration:", style="bold")
-    console.print(f"📁 Data directory: {worklog.worklog_dir}")
-    console.print(f"📄 Data file: {worklog.worklog_file}")
-    console.print(f"🕐 Display format: {worklog.config.display_time_format}")
-    console.print(f"📋 Max recent tasks: {worklog.config.max_recent_tasks}")
-    console.print(f"💾 Max backups: {worklog.config.max_backups}")
+    from ..config import get_default_config_path, ensure_config_exists
+    
+    config_path = get_default_config_path()
+    
+    # Ensure config exists (creates from template if needed)
+    ensure_config_exists(config_path)
+    
+    if show:
+        # Show full config file content
+        console.print(f"📄 Config file: [cyan]{config_path}[/cyan]\n", style="bold")
+        content = config_path.read_text()
+        from rich.syntax import Syntax
+        syntax = Syntax(content, "yaml", theme="monokai", line_numbers=True)
+        console.print(syntax)
+    else:
+        # Show summary
+        worklog = get_worklog()
+        console.print("⚙️ Drudge CLI Configuration:", style="bold")
+        console.print(f"� Config file: [cyan]{config_path}[/cyan]")
+        console.print(f"�📁 Data directory: {worklog.worklog_dir}")
+        console.print(f"� Data file: {worklog.worklog_file}")
+        console.print(f"🕐 Display format: {worklog.config.display_time_format}")
+        console.print(f"📋 Max recent tasks: {worklog.config.max_recent_tasks}")
+        console.print(f"💾 Max backups: {worklog.config.max_backups}")
+        console.print(f"📊 Google Sheets: {'enabled' if worklog.config.google_sheets.enabled else 'disabled'}")
+        if worklog.config.sheet_document_id:
+            console.print(f"📑 Sheet ID: {worklog.config.sheet_document_id[:20]}...")
+        console.print(f"\n💡 Use [cyan]drudge config --show[/cyan] to see full config.yaml")
 
 
 @app.command()
@@ -452,12 +481,16 @@ def setup_logging(verbose: bool = False) -> None:
     Args:
         verbose: Enable debug logging if True
     """
+    # Ensure worklog directory exists
+    log_dir = Path.home() / '.worklog'
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(
         level=level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(Path.home() / '.worklog' / 'worklog.log'),
+            logging.FileHandler(log_dir / 'worklog.log'),
             logging.StreamHandler() if verbose else logging.NullHandler()
         ]
     )

@@ -22,7 +22,7 @@ Usage:
 """
 
 # Version must be defined before importing .cli to avoid circular import
-__version__ = "2.2.0"
+__version__ = "2.2.1"
 __author__ = "Trik16"
 __description__ = "Drudge CLI - A comprehensive work time tracking tool"
 

@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/drudge-cli.svg)](https://pypi.org/project/drudge-cli/)
 [![Python](https://img.shields.io/pypi/pyversions/drudge-cli.svg)](https://pypi.org/project/drudge-cli/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/Trik16/drudge/releases)
+[![Version](https://img.shields.io/badge/version-2.2.1-blue.svg)](https://github.com/Trik16/drudge/releases)
 [![Tests](https://github.com/Trik16/drudge/actions/workflows/test.yml/badge.svg)](https://github.com/Trik16/drudge/actions/workflows/test.yml)
 
 A comprehensive, professionally architected command-line tool for tracking work time on tasks with organized daily logs. Built with modern Python package structure, Typer CLI framework, Rich formatting, type hints, dataclasses, and enterprise-level architectural patterns.
@@ -168,26 +168,24 @@ drudge daily
 
 ### Config File
 
-Drudge can be configured using a YAML file located at `~/.worklog/config.yaml`. This allows you to customize behavior, define project categories, and enable integrations like **Haunts** (Google Calendar sync).
+Drudge can be configured using a YAML file located at `~/.worklog/config.yaml`. This file is **automatically created** from a template on first run.
 
-### Creating Configuration
+### Configuration File
+
+The config file is created automatically when you first run any `drudge` command. You can view and manage it with:
 
 ```bash
-# Interactive setup wizard (recommended)
-drudge config --setup
+# Show configuration summary
+drudge config
 
-# Show current configuration
+# Show full config.yaml content
 drudge config --show
 
-# Edit configuration file
-drudge config --edit
+# Edit configuration file directly
+nano ~/.worklog/config.yaml
+# or
+code ~/.worklog/config.yaml
 ```
-
-The `--setup` wizard will:
-- Detect existing **Haunts** installation
-- Import Google Sheet document ID automatically
-- Guide you through project categorization
-- Configure sync preferences
 
 ### Configuration Structure
 
@@ -347,10 +345,8 @@ drudge daily
 | `drudge --help` | ❓ **IMPROVED** Main help | `drudge --help` |
 | `drudge COMMAND --help` | ❓ **IMPROVED** Command help | `drudge start --help` |
 | **Configuration** | | |
-| `drudge config` | ⚙️ Show configuration help | `drudge config` |
-| `drudge config --setup` | ⚙️ **NEW** Interactive setup wizard | `drudge config --setup` |
-| `drudge config --show` | ⚙️ **NEW** Display current config | `drudge config --show` |
-| `drudge config --edit` | ⚙️ **NEW** Edit config file | `drudge config --edit` |
+| `drudge config` | ⚙️ Show config summary | `drudge config` |
+| `drudge config --show` | ⚙️ Display full config.yaml | `drudge config --show` |
 | `drudge version` | 📦 Show version | `drudge version` |
 
 ## 💡 Usage Examples
@@ -503,9 +499,10 @@ $ drudge daily --date 2025-10-03
 ### Project-Based Workflow (v2.1.1+)
 
 ```bash
-# First, set up configuration with projects
-$ drudge config --setup
-# Follow the wizard to configure projects
+# Configure projects in ~/.worklog/config.yaml
+# (file is auto-created on first run)
+$ drudge config --show
+# Edit to add your projects under 'projects:' section
 
 # Start tasks with project categorization
 $ drudge start "Implement login API" --project Backend
@@ -550,12 +547,16 @@ Drudge can sync your work tasks to Google Sheets in a **haunts-compatible format
 ### Quick Setup
 
 1. **Create or use existing Google Sheet**
-2. **Run config wizard:**
-   ```bash
-   drudge config --setup
-   # Enable Google Sheets sync
-   # Enter your Sheet Document ID
-   # Configure formatting preferences
+
+2. **Configure in `~/.worklog/config.yaml`:**
+   ```yaml
+   # Add your Sheet Document ID (from URL)
+   sheet_document_id: "1A2B3C4D5E6F7G8H9I0J"
+   
+   google_sheets:
+     enabled: true
+     auto_sync: false    # or true for automatic sync on 'drudge end'
+     round_hours: 0.5    # 0.25=15min, 0.5=30min, 1.0=hour
    ```
 
 3. **Sync your tasks:**
@@ -567,8 +568,6 @@ Drudge can sync your work tasks to Google Sheets in a **haunts-compatible format
    ```
 
 ### Sheet Structure
-
-Your Google Spreadsheet should have:
 
 **1. Config Sheet** (name: `config`)
 - Maps project names to Calendar IDs (optional for drudge, required for haunts)
