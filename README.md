@@ -5,12 +5,12 @@
 [![PyPI](https://img.shields.io/pypi/v/drudge-cli.svg)](https://pypi.org/project/drudge-cli/)
 [![Python](https://img.shields.io/pypi/pyversions/drudge-cli.svg)](https://pypi.org/project/drudge-cli/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.1.1-blue.svg)](https://github.com/Trik16/drudge/releases)
+[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/Trik16/drudge/releases)
 [![Tests](https://github.com/Trik16/drudge/actions/workflows/test.yml/badge.svg)](https://github.com/Trik16/drudge/actions/workflows/test.yml)
 
 A comprehensive, professionally architected command-line tool for tracking work time on tasks with organized daily logs. Built with modern Python package structure, Typer CLI framework, Rich formatting, type hints, dataclasses, and enterprise-level architectural patterns.
 
-**🎯 Version 2.1.1 - Enhanced CLI**: Native help system, enhanced end command with --all flag, and powerful clean command for worklog management.
+**🎯 Version 2.2.0 - Google Sheets Sync & Project Support**: Enhanced --time option with date support, project/category tagging, and Google Sheets sync with haunts-compatible format.
 
 ## ✨ Key Features
 
@@ -19,27 +19,44 @@ A comprehensive, professionally architected command-line tool for tracking work 
 - **Anonymous work sessions**: Start working without naming the task
 - **Single-task mode**: Auto-ends previous tasks (default behavior)
 - **Parallel mode**: Work on multiple tasks simultaneously with `--parallel` flag
-- **Custom timestamps**: Backdate entries with `--time HH:MM`
+- **Custom timestamps**: Backdate entries with `--time HH:MM` or `--time "YYYY-MM-DD HH:MM"`
+- **Project tagging**: Organize tasks by project with `--project "Project Name"`
 - **Pause/Resume**: Interrupt work and continue later
 
 ### 📊 Reporting & Views
 - **Unified list command**: See active, paused, and completed tasks at a glance
 - **Recent tasks**: View detailed recent work history
 - **Daily summaries**: Time totals and task breakdown by day
-- **Flexible filtering**: By date, task name, or custom limits
+- **Flexible filtering**: By date, task name, project, or custom limits
 
-### 🗑️ **NEW in v2.1.0**: Clean Command
+### � **NEW in v2.2.0**: Google Sheets Sync
+- **Haunts-compatible format**: Sync to Google Sheets with haunts column layout
+- **Multiple auth methods**: Haunts OAuth, OAuth token, or Service Account
+- **Auto-sync option**: Sync automatically after ending tasks with `--sync`
+- **Selective sync**: Daily, monthly, or by specific date
+
+### 🏷️ **NEW in v2.2.0**: Project Support
+- **Tag tasks**: `drudge start "Fix bug" --project "Backend API"`
+- **Filter by project**: `drudge list --project "Backend"`
+- **Project display**: Projects shown in task listings
+
+### ⏰ **NEW in v2.2.0**: Enhanced Time Option
+- **Date support**: `--time "2025-12-10 14:30"` for any date
+- **Backward compatible**: `--time 14:30` still works (uses today)
+
+### 🗑️ Clean Command
 - **Clean by date**: Remove all entries for a specific date
 - **Clean by task**: Remove all entries for a task across all dates
 - **Selective cleaning**: Clean task entries for specific date only
 - **Clean all**: Reset entire worklog with confirmation
 - **Automatic backups**: Safety first - backups before deletion
 
-### 🏁 **ENHANCED in v2.1.0**: End Command
+### 🏁 End Command
 - **Default**: `drudge end` - Ends only active tasks
-- **New --all flag**: `drudge end --all` - Ends active AND paused tasks
+- **--all flag**: `drudge end --all` - Ends active AND paused tasks
+- **--sync flag**: `drudge end --sync` - End and sync to Google Sheets
 
-### ❓ **IMPROVED in v2.1.0**: Help System
+### ❓ Help System
 - Native Typer `--help` integration
 - Command-specific help: `drudge COMMAND --help`
 - Consistent with standard CLI conventions
