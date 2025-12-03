@@ -22,22 +22,11 @@ class GoogleSheetsConfig:
         auto_sync: Automatically sync to Google Sheet when ending tasks
         round_hours: Rounding increment in hours (0.25=15min, 0.5=30min, 1.0=hour, default 0.5)
         use_haunts_format: Use haunts-compatible format (DD/MM/YYYY, HH:MM, comma decimal) instead of gspread
-        sheet_language: Language for sheet tab names ('en' for English, 'it' for Italian)
     """
     enabled: bool = False
     auto_sync: bool = False
     round_hours: float = 0.5  # 0.25 (15min), 0.5 (30min), 1.0 (hour)
     use_haunts_format: bool = True  # Default to haunts format for consistency
-    sheet_language: str = "en"  # 'en' for English, 'it' for Italian
-
-
-# Month names mapping for different languages
-MONTH_NAMES = {
-    "en": ["January", "February", "March", "April", "May", "June",
-           "July", "August", "September", "October", "November", "December"],
-    "it": ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
-           "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"],
-}
 
 
 @dataclass
@@ -187,15 +176,8 @@ class WorkLogConfig:
             date: Date string in format YYYY-MM-DD
             
         Returns:
-            Month name in configured language (e.g., "October", "Ottobre")
+            Month name (e.g., "October", "November")
         """
         from datetime import datetime
         dt = datetime.strptime(date, "%Y-%m-%d")
-        month_index = dt.month - 1  # 0-based index
-        language = self.google_sheets.sheet_language
-        
-        if language in MONTH_NAMES:
-            return MONTH_NAMES[language][month_index]
-        else:
-            # Fallback to English if language not supported
-            return MONTH_NAMES["en"][month_index]
+        return dt.strftime("%B")  # Full month name
