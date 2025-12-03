@@ -1,0 +1,5 @@
+# Add to .gitignore
+test_data/
+.pytest_cache/
+*.pyc
+__pycache__/

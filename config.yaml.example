@@ -45,6 +45,11 @@ google_sheets:
   # Enable/disable Google Sheets sync
   enabled: true
   
+  # Use haunts-compatible format (DD/MM/YYYY, HH:MM, comma decimal)
+  # true  = Haunts format (works with haunts OAuth or standalone)
+  # false = Legacy gspread format (requires gspread credentials)
+  use_haunts_format: true
+  
   # Auto-sync to Google Sheet when ending tasks
   # true  = Tasks written immediately on 'drudge end'
   # false = Use 'drudge sync' to manually sync

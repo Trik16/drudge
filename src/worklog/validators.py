@@ -73,6 +73,58 @@ class WorkLogValidator:
             raise ValueError(f"Invalid time format '{time_str}': {e}")
     
     @staticmethod
+    def validate_datetime_format(datetime_str: str) -> datetime:
+        """
+        Validate and parse datetime string with optional date component.
+        
+        Supports two formats:
+        - "HH:MM" - Time only, uses today's date
+        - "YYYY-MM-DD HH:MM" - Full datetime
+        
+        Args:
+            datetime_str: Datetime string in HH:MM or YYYY-MM-DD HH:MM format
+            
+        Returns:
+            datetime: Parsed datetime object
+            
+        Raises:
+            ValueError: If format is invalid
+        """
+        datetime_str = datetime_str.strip()
+        
+        # Check if it contains a date (has space separator)
+        if ' ' in datetime_str:
+            # Format: YYYY-MM-DD HH:MM
+            parts = datetime_str.split(' ')
+            if len(parts) != 2:
+                raise ValueError(f"Invalid datetime format '{datetime_str}': Expected 'YYYY-MM-DD HH:MM' or 'HH:MM'")
+            
+            date_str, time_str = parts
+            
+            # Validate date
+            try:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                raise ValueError(f"Invalid date format '{date_str}': Expected YYYY-MM-DD")
+            
+            # Validate time
+            hours, minutes = WorkLogValidator.validate_time_format(time_str)
+            
+            return datetime.combine(
+                date_obj,
+                datetime.min.time().replace(hour=hours, minute=minutes)
+            )
+        else:
+            # Format: HH:MM (use today's date)
+            hours, minutes = WorkLogValidator.validate_time_format(datetime_str)
+            
+            today = datetime.now().date()
+            return datetime.combine(
+                today,
+                datetime.min.time().replace(hour=hours, minute=minutes)
+            )
+    
+    @staticmethod
     def validate_time_sequence(start_time: str, stop_time: str) -> None:
         """
         Validate that stop time is after start time.

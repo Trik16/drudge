@@ -2,12 +2,20 @@ OLD_VERSION/
 MAINTENANCE.md
 PYPI_*.md
 docs/GITHUB*.md
+docs/*TESTING*
 .venv/
 __pycache__/
 dist/
 src/drudge.egg-info/    
 src/drudge_cli.egg-info/
 *.pyc
+
+# Test credentials and config (contains sensitive data)
+test-credentials.json
+test-config.yaml
+credentials.json
+*.key
+*.pem
 
 # Symbolic links to external projects
 haunts

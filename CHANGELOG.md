@@ -2,6 +2,119 @@
 
 All notable changes to drudge-cli will be documented in this file.
 
+## [2.2.0] - 2025-12-03
+
+### Added
+
+#### Enhanced `--time` Option with Date Support
+- **Full datetime format**: `--time "YYYY-MM-DD HH:MM"` now supported on all time-related commands
+- **Backward compatible**: Existing `--time HH:MM` format continues to work (uses today's date)
+- **Available commands**: `start`, `end`, `pause`, `resume`
+- **Centralized validation**: `WorkLogValidator.validate_datetime_format()` handles both formats
+
+Examples:
+```bash
+drudge start "Meeting" --time "2025-12-10 14:00"
+drudge end "Meeting" --time "2025-12-10 17:30"
+```
+
+#### Project/Category Support
+- **`--project` / `-P` option**: Assign tasks to projects on start command
+- **Project filtering**: Filter completed tasks by project in list command
+- **Display enhancement**: Projects shown in parentheses for active and completed tasks
+- **Backend support**: `TaskEntry.project` field and `active_task_projects` tracking
+
+Examples:
+```bash
+drudge start "Fix bug" --project "Backend API"
+drudge list --project "Backend"
+```
+
+#### Google Sheets Sync with Haunts-Compatible Format
+- **`HauntsAdapter`**: New adapter in `src/worklog/sync/sheets.py` supporting three authentication methods:
+  1. **Haunts OAuth**: Reuses existing haunts credentials from `~/.config/haunts/`
+  2. **OAuth Token File**: Direct OAuth token JSON (with `refresh_token`)
+  3. **Service Account**: Standard Google Service Account JSON (with `client_email`)
+
+- **Configuration field `use_haunts_format`**: New boolean in `google_sheets` section:
+  ```yaml
+  google_sheets:
+    enabled: true
+    use_haunts_format: true  # true = haunts format, false = legacy gspread
+    round_hours: 0.5
+  ```
+
+- **Dependency `google-api-python-client>=2.108.0`**: Added to base dependencies for direct Sheets API support
+
+- **Optional dependency `haunts>=0.7.0`**: Available as `[sheets]` extra:
+  ```bash
+  pip install 'drudge-cli[sheets]'
+  ```
+
+#### Dev Environment Reorganization
+- **`dev-env/` folder**: Docker test files moved to dedicated directory
+- **Dynamic paths**: Scripts use config-based paths for credentials and sheet IDs
+- **Included files**: `Dockerfile.test`, `test_haunts_sync.py`, `create_november_tasks.py`, `clear_november.py`, `check_headers.py`
+
+#### Authentication Flow
+```
+GoogleSheetsSync(config, credentials_path)
+│
+├─ use_haunts_format=true (default)
+│   ├─ credentials_path provided → OAuth Token or Service Account
+│   └─ credentials_path=None + haunts installed → ~/.config/haunts/ OAuth
+│
+└─ use_haunts_format=false → Legacy gspread backend
+```
+
+#### Output Format (Haunts-Compatible)
+| Column | Example | Description |
+|--------|---------|-------------|
+| A: Date | `18/11/2025` | DD/MM/YYYY format |
+| B: Start time | `09:00` | HH:MM format |
+| C: Spent | `2,5` | Hours with comma decimal |
+| D: Project | `pippo` | Project name |
+| E: Activity | `Setup dev...` | Task name |
+| F: Details | | Empty (reserved) |
+| G-J | | Reserved for haunts Calendar sync |
+
+### Changed
+
+#### `src/worklog/sync/sheets.py`
+- **`GoogleSheetsSync.__init__`**: Removed `use_haunts` parameter, now reads from config
+- **Column order fixed**: Correct haunts order (Date, Start time, Spent, Project, Activity, Details...)
+- **Clear error messages**: Suggested solutions when initialization fails
+
+#### `src/worklog/config.py`
+- **`GoogleSheetsConfig.use_haunts_format`**: New field (default `True`)
+- **YAML loader**: Ignores unknown fields for backward compatibility
+
+#### `src/worklog/cli/commands.py`
+- **`start` command**: Added `--project` / `-P` option
+- **`list` command**: Added `--project` / `-P` filter option
+- **All time commands**: Updated `--time` help to show both formats
+
+#### `src/worklog/managers/worklog.py`
+- **`list_entries()`**: Added `project_filter` parameter and project display
+- **`_parse_custom_time()`**: Now handles full datetime format
+
+#### Configuration
+- **`sheet_document_id`**: Single source of truth at root level
+- Removed obsolete fields: `google_sheets.document_id`, `google_sheets.credentials_file`
+
+### Fixed
+- **Column order**: Data now written in correct haunts column order
+- **`TaskEntry.description`**: Removed reference to non-existent field
+- **Document ID duplication**: Consolidated to single `sheet_document_id` field
+
+### Test Coverage
+- **117 comprehensive test cases** (all passing)
+- New tests for `--time` with date format (3 tests)
+- New tests for `--project` option (4 tests)
+- New tests for datetime validation (5 tests)
+- Unit tests use `use_haunts_format=false` to avoid credential dependency
+- Integration tests with real Google Sheets sync verified
+
 ## [2.1.1] - 2025-10-04
 
 ### Fixed
@@ -55,7 +168,7 @@ All notable changes to drudge-cli will be documented in this file.
 - Enhanced documentation and examples
 
 ### Test Coverage
-- 39 comprehensive test cases (all passing)
+- 47 comprehensive test cases (all passing)
 
 ## [2.0.1] - 2025-10-01
 

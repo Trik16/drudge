@@ -38,7 +38,7 @@ jobs:
       
       - name: Run tests
         run: |
-          python -m pytest test_worklog_updated.py -v --cov=src/worklog --cov-report=xml --cov-report=term
+          python -m pytest tests/ -v --cov=src/worklog --cov-report=xml --cov-report=term
       
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.10'

@@ -547,10 +547,126 @@ class TestNewFeatures(unittest.TestCase):
             self.assertIsNotNone(entry.end_time)
             self.assertIsNotNone(entry.duration)
 
+    def test_custom_time_with_date(self):
+        """Test --time option with full date format YYYY-MM-DD HH:MM."""
+        result = self.worklog.start_task("Task", custom_time="2025-12-10 09:30")
+        
+        self.assertTrue(result)
+        start_time = self.worklog.data.active_tasks["Task"]
+        dt = datetime.fromisoformat(start_time)
+        self.assertEqual(dt.year, 2025)
+        self.assertEqual(dt.month, 12)
+        self.assertEqual(dt.day, 10)
+        self.assertEqual(dt.hour, 9)
+        self.assertEqual(dt.minute, 30)
 
-if __name__ == '__main__':
-    # Run all tests
-    unittest.main()
+    def test_custom_time_with_date_on_end(self):
+        """Test --time option with date on end command."""
+        self.worklog.start_task("Task", custom_time="2025-12-10 09:00")
+        result = self.worklog.end_task("Task", custom_time="2025-12-10 17:30")
+        
+        self.assertTrue(result)
+        entry = self.worklog.data.entries[-1]
+        end_dt = datetime.fromisoformat(entry.end_time)
+        self.assertEqual(end_dt.year, 2025)
+        self.assertEqual(end_dt.month, 12)
+        self.assertEqual(end_dt.day, 10)
+        self.assertEqual(end_dt.hour, 17)
+        self.assertEqual(end_dt.minute, 30)
+
+    def test_project_on_start(self):
+        """Test --project option on start command."""
+        result = self.worklog.start_task("Fix bug", project="Backend API")
+        
+        self.assertTrue(result)
+        self.assertIn("Fix bug", self.worklog.data.active_tasks)
+        self.assertEqual(self.worklog.data.active_task_projects.get("Fix bug"), "Backend API")
+
+    def test_project_saved_in_entry(self):
+        """Test project is saved in completed task entry."""
+        self.worklog.start_task("Fix bug", project="Backend API")
+        self.worklog.end_task("Fix bug")
+        
+        entry = self.worklog.data.entries[-1]
+        self.assertEqual(entry.project, "Backend API")
+
+    def test_project_filter_in_list(self):
+        """Test --project filter in list_entries."""
+        # Create tasks with different projects
+        self.worklog.start_task("Task 1", project="Frontend")
+        self.worklog.end_task("Task 1")
+        
+        self.worklog.start_task("Task 2", project="Backend")
+        self.worklog.end_task("Task 2")
+        
+        self.worklog.start_task("Task 3", project="Backend API")
+        self.worklog.end_task("Task 3")
+        
+        # Filter by project (Backend matches both "Backend" and "Backend API")
+        entries = [e for e in self.worklog.data.entries 
+                   if e.project and "backend" in e.project.lower()]
+        self.assertEqual(len(entries), 2)
+        
+        # Filter by exact project
+        entries = [e for e in self.worklog.data.entries 
+                   if e.project and e.project == "Frontend"]
+        self.assertEqual(len(entries), 1)
+
+    def test_task_without_project(self):
+        """Test task without project has None as project."""
+        self.worklog.start_task("Simple Task")
+        self.worklog.end_task("Simple Task")
+        
+        entry = self.worklog.data.entries[-1]
+        self.assertIsNone(entry.project)
+
+
+class TestDateTimeValidation(unittest.TestCase):
+    """Test datetime format validation."""
+    
+    def test_validate_datetime_time_only(self):
+        """Test validation of HH:MM format."""
+        from src.worklog.validators import WorkLogValidator
+        
+        result = WorkLogValidator.validate_datetime_format("14:30")
+        self.assertEqual(result.hour, 14)
+        self.assertEqual(result.minute, 30)
+        # Should use today's date
+        self.assertEqual(result.date(), datetime.now().date())
+
+    def test_validate_datetime_full_format(self):
+        """Test validation of YYYY-MM-DD HH:MM format."""
+        from src.worklog.validators import WorkLogValidator
+        
+        result = WorkLogValidator.validate_datetime_format("2025-12-10 09:30")
+        self.assertEqual(result.year, 2025)
+        self.assertEqual(result.month, 12)
+        self.assertEqual(result.day, 10)
+        self.assertEqual(result.hour, 9)
+        self.assertEqual(result.minute, 30)
+
+    def test_validate_datetime_invalid_date(self):
+        """Test validation fails for invalid date."""
+        from src.worklog.validators import WorkLogValidator
+        
+        with self.assertRaises(ValueError) as ctx:
+            WorkLogValidator.validate_datetime_format("2025-13-10 09:30")
+        self.assertIn("Invalid date", str(ctx.exception))
+
+    def test_validate_datetime_invalid_time(self):
+        """Test validation fails for invalid time."""
+        from src.worklog.validators import WorkLogValidator
+        
+        with self.assertRaises(ValueError) as ctx:
+            WorkLogValidator.validate_datetime_format("25:30")
+        self.assertIn("Hours must be", str(ctx.exception))
+
+    def test_validate_datetime_invalid_format(self):
+        """Test validation fails for malformed input."""
+        from src.worklog.validators import WorkLogValidator
+        
+        with self.assertRaises(ValueError):
+            WorkLogValidator.validate_datetime_format("not-a-time")
 
 
 if __name__ == '__main__':

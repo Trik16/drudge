@@ -54,7 +54,8 @@ def get_worklog() -> WorkLog:
 @app.command()
 def start(
     task_name: Optional[str] = typer.Argument(None, help="Name of the task to start (anonymous if omitted)"),
-    time: Optional[str] = typer.Option(None, "--time", "-t", help="Custom start time in HH:MM format"),
+    time: Optional[str] = typer.Option(None, "--time", "-t", help="Custom start time (HH:MM or YYYY-MM-DD HH:MM)"),
+    project: Optional[str] = typer.Option(None, "--project", "-P", help="Project/category name for task organization"),
     force: bool = typer.Option(False, "--force", "-f", help="Force start by ending active tasks"),
     parallel: bool = typer.Option(False, "--parallel", "-p", help="Allow parallel tasks (don't auto-end active tasks)")
 ) -> None:
@@ -69,6 +70,8 @@ def start(
         drudge start "Fix bug #123"
         drudge start                    # Anonymous work
         drudge start "Review PR" --time 09:30
+        drudge start "Meeting" --time "2025-12-10 14:00"  # Specific date
+        drudge start "Fix bug" --project "Backend API"   # With project
         drudge start "Meeting" --parallel
         drudge start "Task" --force     # End active tasks first
     """
@@ -79,7 +82,7 @@ def start(
     # - parallel=False (default): Single-task mode (auto-end active tasks)
     # force parameter is respected in both modes for explicit auto-ending
     auto_end_mode = not parallel  # Single-task mode auto-ends
-    success = worklog.start_task(task_name, custom_time=time, force=force or auto_end_mode, parallel=parallel)
+    success = worklog.start_task(task_name, custom_time=time, force=force or auto_end_mode, parallel=parallel, project=project)
     
     if not success:
         raise typer.Exit(1)
@@ -88,7 +91,7 @@ def start(
 @app.command()
 def end(
     task_name: Optional[str] = typer.Argument(None, help="Name of the task to end (omit to end all active tasks)"),
-    time: Optional[str] = typer.Option(None, "--time", "-t", help="Custom end time in HH:MM format"),
+    time: Optional[str] = typer.Option(None, "--time", "-t", help="Custom end time (HH:MM or YYYY-MM-DD HH:MM)"),
     all: bool = typer.Option(False, "--all", "-a", help="End all active AND paused tasks"),
     sync: bool = typer.Option(False, "--sync", "-s", help="Automatically sync to Google Sheets after ending task(s)")
 ) -> None:
@@ -102,6 +105,7 @@ def end(
     Examples:
         drudge end "Fix bug #123"
         drudge end "Meeting" --time 17:30
+        drudge end "Meeting" --time "2025-12-10 17:30"    # Specific date
         drudge end                          # End all active tasks
         drudge end --all                    # End all active AND paused tasks
         drudge end "Review PR" --sync       # End task and sync to Google Sheets
@@ -149,7 +153,7 @@ def end(
 @app.command()
 def pause(
     task_name: str = typer.Argument(..., help="Name of the task to pause"),
-    time: Optional[str] = typer.Option(None, "--time", "-t", help="Custom pause time in HH:MM format")
+    time: Optional[str] = typer.Option(None, "--time", "-t", help="Custom pause time (HH:MM or YYYY-MM-DD HH:MM)")
 ) -> None:
     """
     ⏸️ Pause an active task for later resumption.
@@ -157,6 +161,7 @@ def pause(
     Examples:
         worklog pause "Fix bug #123"
         worklog pause "Review PR" --time 12:00
+        worklog pause "Review PR" --time "2025-12-10 12:00"
     """
     worklog = get_worklog()
     success = worklog.pause_task(task_name, custom_time=time)
@@ -168,7 +173,7 @@ def pause(
 @app.command()
 def resume(
     task_name: str = typer.Argument(..., help="Name of the task to resume"),
-    time: Optional[str] = typer.Option(None, "--time", "-t", help="Custom resume time in HH:MM format")
+    time: Optional[str] = typer.Option(None, "--time", "-t", help="Custom resume time (HH:MM or YYYY-MM-DD HH:MM)")
 ) -> None:
     """
     ▶️ Resume a paused task.
@@ -176,6 +181,7 @@ def resume(
     Examples:
         worklog resume "Fix bug #123"
         worklog resume "Review PR" --time 13:00
+        worklog resume "Review PR" --time "2025-12-10 13:00"
     """
     worklog = get_worklog()
     success = worklog.resume_task(task_name, custom_time=time)
@@ -206,7 +212,8 @@ def recent(
 def list(
     date: Optional[str] = typer.Option(None, "--date", "-d", help="Filter by date (YYYY-MM-DD)"),
     limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Limit number of entries"),
-    task: Optional[str] = typer.Option(None, "--task", "-t", help="Filter by task name")
+    task: Optional[str] = typer.Option(None, "--task", "-t", help="Filter by task name"),
+    project: Optional[str] = typer.Option(None, "--project", "-P", help="Filter by project name")
 ) -> None:
     """
     📋 Show work status: active tasks, paused tasks, and completed entries.
@@ -218,9 +225,10 @@ def list(
         drudge list                      # Show current status
         drudge list --date 2025-01-15    # Show tasks from specific date
         drudge list --task "bug" --limit 5
+        drudge list --project "Backend API"  # Filter by project
     """
     worklog = get_worklog()
-    worklog.list_entries(date=date, limit=limit, task_filter=task)
+    worklog.list_entries(date=date, limit=limit, task_filter=task, project_filter=project)
 
 
 @app.command()

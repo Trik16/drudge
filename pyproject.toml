@@ -45,9 +45,13 @@ dependencies = [
     "pyyaml>=6.0.0",
     "gspread>=5.12.0",
     "google-auth>=2.23.0",
+    "google-api-python-client>=2.108.0",
 ]
 
 [project.optional-dependencies]
+sheets = [
+    "haunts>=0.7.0",
+]
 dev = [
     "pytest>=7.0.0",
     "black>=23.0.0",

@@ -75,6 +75,62 @@ echo 'alias drudge="python3 -m src.worklog"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
+### Enable Shell Autocompletion
+
+Drudge supports tab completion for commands and options in Bash, Zsh, Fish, and PowerShell.
+
+#### Automatic Installation (Recommended)
+```bash
+# Install completion for your current shell
+drudge --install-completion
+
+# Restart your shell or source your config
+source ~/.zshrc  # for Zsh
+source ~/.bashrc # for Bash
+```
+
+#### Manual Installation
+
+**Zsh:**
+```bash
+# Generate completion script
+drudge --show-completion zsh > ~/.drudge-completion.zsh
+
+# Add to ~/.zshrc
+echo 'source ~/.drudge-completion.zsh' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**Bash:**
+```bash
+# Generate completion script
+drudge --show-completion bash > ~/.drudge-completion.bash
+
+# Add to ~/.bashrc
+echo 'source ~/.drudge-completion.bash' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**Fish:**
+```bash
+# Generate completion script
+drudge --show-completion fish > ~/.config/fish/completions/drudge.fish
+```
+
+**PowerShell:**
+```powershell
+# Generate completion script
+drudge --show-completion powershell | Out-File -FilePath $PROFILE
+```
+
+#### Verify Installation
+```bash
+# Try typing and press TAB
+drudge <TAB>        # Shows all available commands
+drudge start <TAB>  # Shows task name suggestions
+drudge end --<TAB>  # Shows available flags
+```
+
 ## 🚀 Quick Start
 
 ```bash
@@ -634,7 +690,7 @@ src/worklog/
 **Improvements:**
 - 🔧 End command: `drudge end` keeps paused tasks, `drudge end --all` ends everything
 - 🛡️ Clean safety: Automatic backups, confirmation for --all, smart daily file rebuild
-- 📚 All 39 test cases passing
+- 📚 All 47 test cases passing (100%)
 
 ### Version 2.0.2
 
@@ -658,21 +714,31 @@ src/worklog/
 
 ## 🧪 Testing
 
-### Run Tests
+### Running Tests
 
 ```bash
 # Run all tests
-python3.10 -m pytest test_worklog_updated.py -v
+pytest tests/ -v
+
+# Run specific test file
+pytest tests/test_cli_integration.py -v
 
 # Run specific test class
-python3.10 -m pytest test_worklog_updated.py::TestNewFeatures -v
+pytest tests/test_worklog_updated.py::TestNewFeatures -v
+
+# Run tests in Docker (isolated environment)
+docker build -f Dockerfile.test -t drudge-test .
+docker run --rm drudge-test
 ```
 
 ### Test Coverage
-- **39 comprehensive test cases**
-- 100% pass rate on Python 3.10 and 3.13
+- **106 comprehensive test cases**
+  - 47 CLI integration tests
+  - 20 Google Sheets sync tests
+  - 39 core worklog tests
+- 100% pass rate on Python 3.10-3.13
 - Core features: Start, end, pause, resume
-- New features: Anonymous tasks, parallel mode, clean command
+- New features: Anonymous tasks, parallel mode, clean command, Google Sheets sync
 - Edge cases and error handling
 
 ## 🛠️ Development

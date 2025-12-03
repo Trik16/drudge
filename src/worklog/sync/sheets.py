@@ -1,7 +1,7 @@
 """Google Sheets sync functionality for haunts-compatible format."""
 
 import math
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
@@ -11,6 +11,13 @@ from google.oauth2.service_account import Credentials
 
 from ..config import WorkLogConfig
 from ..models import TaskEntry
+
+# Optional haunts import
+try:
+    from haunts import spreadsheet as haunts_spreadsheet
+    HAUNTS_AVAILABLE = True
+except ImportError:
+    HAUNTS_AVAILABLE = False
 
 
 def round_hours(hours: float, increment: float) -> float:
@@ -80,6 +87,376 @@ def format_hours(hours: float, round_increment: float) -> str:
     return formatted.replace(".", ",")
 
 
+class HauntsAdapter:
+    """
+    Adapter to use haunts-style formatting and optionally haunts credentials.
+    
+    Can use either:
+    1. Existing haunts OAuth credentials (~/.config/haunts/)
+    2. Service account credentials (credentials_path parameter)
+    """
+    
+    def __init__(self, config: WorkLogConfig, credentials_path: Optional[Path] = None):
+        """
+        Initialize the HauntsAdapter.
+        
+        Priority order:
+        1. If credentials_path provided → Use OAuth token or Service Account from file
+        2. If no credentials_path AND haunts installed → Try ~/.config/haunts/ OAuth
+        3. Otherwise → Raise clear error
+        
+        Args:
+            config: WorkLog configuration
+            credentials_path: Path to credentials file (OAuth token JSON or Service Account JSON).
+                            If None, will try haunts OAuth from ~/.config/haunts/
+        
+        Raises:
+            ImportError: If haunts library needed but not installed
+            ValueError: If Google Sheets is not enabled in config
+            FileNotFoundError: If no valid credentials found
+        """
+        if not config.google_sheets.enabled:
+            raise ValueError("Google Sheets sync is not enabled in configuration")
+        
+        self.config = config
+        self.credentials_path = credentials_path
+        self._use_haunts_oauth = False
+        
+        # CASE 1: credentials_path provided → Use it (OAuth token or Service Account)
+        if credentials_path:
+            if not credentials_path.exists():
+                raise FileNotFoundError(
+                    f"Credentials file not found: {credentials_path}\n"
+                    f"Expected: OAuth token JSON or Service Account JSON"
+                )
+            self._init_with_service_account(credentials_path)
+            return
+        
+        # CASE 2: No credentials_path → Try haunts OAuth if available
+        if HAUNTS_AVAILABLE:
+            try:
+                self._init_with_haunts_oauth()
+                self._use_haunts_oauth = True
+                return
+            except FileNotFoundError:
+                # Haunts not configured, continue to error
+                pass
+        
+        # CASE 3: No valid credentials found
+        raise FileNotFoundError(
+            "No credentials found. Choose one:\n"
+            "  1. Provide credentials_path with OAuth token or Service Account JSON\n"
+            "  2. Install haunts: pip install 'drudge-cli[sheets]'\n"
+            "  3. Set up haunts OAuth: run 'haunts' command to configure ~/.config/haunts/"
+        )
+    
+    def _init_with_haunts_oauth(self):
+        """Initialize using haunts OAuth credentials and config."""
+        if not HAUNTS_AVAILABLE:
+            raise ImportError("haunts library is not installed")
+        
+        from pathlib import Path as PathlibPath
+        from haunts.credentials import get_credentials
+        from haunts.ini import init as haunts_init, get as haunts_get
+        from googleapiclient.discovery import build
+        
+        # Check if haunts config exists
+        haunts_config_dir = PathlibPath.home() / ".config" / "haunts"
+        haunts_config_file = haunts_config_dir / "config.ini"
+        
+        if not haunts_config_file.exists():
+            raise FileNotFoundError("Haunts config not found at ~/.config/haunts/config.ini")
+        
+        # Initialize haunts config
+        haunts_init(haunts_config_file)
+        
+        # Get sheet document ID from haunts config
+        haunts_sheet_id = haunts_get("CONTROLLER_SHEET_DOCUMENT_ID")
+        
+        # Override our config with haunts sheet ID if not already set
+        if not self.config.sheet_document_id:
+            self.config.sheet_document_id = haunts_sheet_id
+        
+        # Get OAuth credentials using haunts
+        creds = get_credentials(
+            haunts_config_dir,
+            ["https://www.googleapis.com/auth/spreadsheets"],
+            "sheets-token.json"
+        )
+        
+        service = build("sheets", "v4", credentials=creds)
+        self._sheet = service.spreadsheets()
+    
+    def _init_with_service_account(self, credentials_path: Path):
+        """
+        Initialize using credentials file.
+        
+        Supports two formats:
+        1. Service account JSON (has "client_email" field)
+        2. OAuth token JSON from haunts (has "token", "refresh_token" fields)
+        """
+        import json
+        from google.oauth2.service_account import Credentials as ServiceAccountCredentials
+        from google.oauth2.credentials import Credentials as OAuthCredentials
+        from googleapiclient.discovery import build
+        
+        # Load and check credential type
+        with open(credentials_path, 'r') as f:
+            cred_data = json.load(f)
+        
+        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+        
+        if "client_email" in cred_data:
+            # Service account format
+            creds = ServiceAccountCredentials.from_service_account_file(
+                str(credentials_path),
+                scopes=scopes
+            )
+        elif "refresh_token" in cred_data:
+            # OAuth token format (haunts style)
+            creds = OAuthCredentials(
+                token=cred_data.get("token"),
+                refresh_token=cred_data.get("refresh_token"),
+                token_uri=cred_data.get("token_uri"),
+                client_id=cred_data.get("client_id"),
+                client_secret=cred_data.get("client_secret"),
+                scopes=cred_data.get("scopes", scopes)
+            )
+        else:
+            raise ValueError(
+                f"Invalid credentials file format. Expected either:\n"
+                f"- Service account JSON (with 'client_email')\n"
+                f"- OAuth token JSON (with 'refresh_token')"
+            )
+        
+        service = build("sheets", "v4", credentials=creds)
+        self._sheet = service.spreadsheets()
+    
+    def _convert_task_to_haunts_format(self, task: TaskEntry) -> dict:
+        """
+        Convert TaskEntry to haunts-compatible format.
+        
+        Args:
+            task: The task entry to convert
+        
+        Returns:
+            Dictionary with haunts-compatible fields
+        
+        Raises:
+            ValueError: If task is missing required fields
+        """
+        if not task.end_time:
+            raise ValueError("Task must have end_time")
+        
+        if not task.start_time:
+            raise ValueError("Task must have start_time")
+        
+        # Parse timestamps to datetime objects
+        start_dt = datetime.fromisoformat(task.start_time)
+        end_dt = datetime.fromisoformat(task.end_time)
+        
+        # Calculate duration as timedelta
+        duration = end_dt - start_dt
+        
+        # Extract date (using end_time date)
+        task_date = end_dt.date()
+        
+        return {
+            'date': task_date,
+            'start_time': start_dt,
+            'project': task.project or "",
+            'activity': task.task,  # Use task.task for activity
+            'details': "",  # TaskEntry doesn't have description field
+            'duration': duration
+        }
+    
+    def _ensure_worksheet_exists(self, month_name: str) -> None:
+        """
+        Ensure the monthly worksheet exists with proper headers.
+        
+        Args:
+            month_name: Name of the worksheet (e.g., "October")
+        """
+        try:
+            # Try to get the worksheet
+            self._sheet.values().get(
+                spreadsheetId=self.config.sheet_document_id,
+                range=f"{month_name}!A1:A1"
+            ).execute()
+        except Exception:
+            # Worksheet doesn't exist, create it
+            requests = [{
+                'addSheet': {
+                    'properties': {
+                        'title': month_name,
+                        'gridProperties': {
+                            'rowCount': 100,
+                            'columnCount': 10  # Updated from 9 to 10 columns
+                        }
+                    }
+                }
+            }]
+            
+            self._sheet.batchUpdate(
+                spreadsheetId=self.config.sheet_document_id,
+                body={'requests': requests}
+            ).execute()
+            
+            # Add header row - Order: Date, Start time, Spent, Project, Activity, Details, Custom, Event id, Link, Action
+            headers = [
+                ["Date", "Start time", "Spent", "Project", "Activity", 
+                 "Details", "Custom", "Event id", "Link", "Action"]
+            ]
+            
+            self._sheet.values().update(
+                spreadsheetId=self.config.sheet_document_id,
+                range=f'{month_name}!A1:J1',  # Updated from I1 to J1
+                valueInputOption='USER_ENTERED',
+                body={'values': headers}
+            ).execute()
+    
+    def sync_task(self, task: TaskEntry) -> None:
+        """
+        Sync a single task to Google Sheets using haunts-style formatting.
+        
+        Args:
+            task: The task entry to sync
+        
+        Raises:
+            ValueError: If task is not completed or missing required fields
+        """
+        # Convert task to haunts format
+        haunts_data = self._convert_task_to_haunts_format(task)
+        
+        # Get month name for the sheet
+        end_dt = datetime.fromisoformat(task.end_time)
+        sheet_date_str = end_dt.strftime("%Y-%m-%d")
+        month_name = self.config.get_sheet_name_for_date(sheet_date_str)
+        
+        # Ensure worksheet exists
+        self._ensure_worksheet_exists(month_name)
+        
+        # Use haunts-style append logic (adapted from haunts.spreadsheet.append_line)
+        # Get the first empty line
+        next_line = self._get_first_empty_line(month_name)
+        
+        # Format data in haunts style
+        formatted_time = haunts_data['start_time'].strftime("%H:%M")
+        formatted_duration = self._format_duration_haunts(haunts_data['duration'])
+        formatted_date = haunts_data['date'].strftime("%d/%m/%Y")
+        
+        # Build the row data matching haunts format
+        # Order: Date, Start time, Spent, Project, Activity, Details, Custom, Event id, Link, Action
+        row_data = [
+            formatted_date,      # A: Date
+            formatted_time,      # B: Start time
+            formatted_duration,  # C: Spent (duration)
+            haunts_data['project'],   # D: Project
+            haunts_data['activity'],  # E: Activity
+            haunts_data['details'],   # F: Details
+            "",                  # G: Custom (empty)
+            "",                  # H: Event id (filled by haunts sync)
+            "",                  # I: Link (filled by haunts sync)
+            ""                   # J: Action (used by haunts sync)
+        ]
+        
+        # Write to sheet (A:J = 10 columns)
+        range_name = f"{month_name}!A{next_line}:J{next_line}"
+        self._sheet.values().update(
+            spreadsheetId=self.config.sheet_document_id,
+            range=range_name,
+            valueInputOption='USER_ENTERED',
+            body={'values': [row_data]}
+        ).execute()
+    
+    def _get_first_empty_line(self, month_name: str) -> int:
+        """
+        Find the first empty line in the worksheet.
+        
+        Args:
+            month_name: Name of the worksheet
+        
+        Returns:
+            Line number (1-indexed) of first empty row
+        """
+        try:
+            result = self._sheet.values().get(
+                spreadsheetId=self.config.sheet_document_id,
+                range=f"{month_name}!A:A"
+            ).execute()
+            values = result.get('values', [])
+            # First empty line is after all existing rows (skip header)
+            return len(values) + 1
+        except Exception:
+            # If error, assume starting at line 2 (after header)
+            return 2
+    
+    def _format_duration_haunts(self, duration: timedelta) -> str:
+        """
+        Format duration in haunts style (hours with comma separator).
+        
+        Args:
+            duration: timedelta object
+        
+        Returns:
+            Formatted duration string (e.g., "2,5" for 2.5 hours)
+        """
+        total_seconds = duration.total_seconds()
+        hours = total_seconds / 3600
+        # Round to 2 decimal places and format with comma
+        rounded = round(hours, 2)
+        return str(rounded).replace('.', ',')
+    
+    def sync_tasks(self, tasks: List[TaskEntry], filter_date: Optional[date] = None) -> int:
+        """
+        Sync multiple tasks to Google Sheets using haunts.
+        
+        Args:
+            tasks: List of task entries to sync
+            filter_date: If provided, only sync tasks from this date
+        
+        Returns:
+            Number of tasks synced
+        """
+        synced_count = 0
+        
+        for task in tasks:
+            if not task.end_time:
+                continue  # Skip incomplete tasks
+            
+            # Filter by date if specified
+            if filter_date:
+                end_dt = datetime.fromisoformat(task.end_time)
+                if end_dt.date() != filter_date:
+                    continue
+            
+            try:
+                self.sync_task(task)
+                synced_count += 1
+            except Exception as e:
+                # Log error but continue with other tasks
+                print(f"Error syncing task: {e}")
+                continue
+        
+        return synced_count
+    
+    def test_connection(self) -> bool:
+        """
+        Test the connection to Google Sheets.
+        
+        Returns:
+            True if connection successful, False otherwise
+        """
+        try:
+            # Try to get spreadsheet properties
+            result = self._sheet.get(
+                spreadsheetId=self.config.sheet_document_id
+            ).execute()
+            return True
+        except Exception:
+            return False
+
+
 class GoogleSheetsSync:
     """
     Handles syncing work tasks to Google Sheets in haunts-compatible format.
@@ -90,6 +467,8 @@ class GoogleSheetsSync:
     - Date format: DD/MM/YYYY
     - Time format: HH:MM
     - Duration: decimal hours with comma separator
+    
+    Uses HauntsAdapter backend if available, falls back to gspread.
     """
     
     def __init__(self, config: WorkLogConfig, credentials_path: Optional[Path] = None):
@@ -97,22 +476,38 @@ class GoogleSheetsSync:
         Initialize the Google Sheets sync.
         
         Args:
-            config: WorkLog configuration
-            credentials_path: Path to Google service account JSON credentials.
-                            If None, uses default credentials.
+            config: WorkLog configuration (reads google_sheets.use_haunts_format)
+            credentials_path: Path to credentials file (OAuth token or Service Account JSON).
+                            If None and haunts library available, tries ~/.config/haunts/
         
         Raises:
             ValueError: If Google Sheets is not enabled in config
-            FileNotFoundError: If credentials file doesn't exist
-            DefaultCredentialsError: If authentication fails
+            FileNotFoundError: If credentials file doesn't exist and haunts config not found
         """
         if not config.google_sheets.enabled:
             raise ValueError("Google Sheets sync is not enabled in configuration")
         
         self.config = config
         self.credentials_path = credentials_path
+        self._adapter: Optional[HauntsAdapter] = None
         self._client: Optional[gspread.Client] = None
         self._spreadsheet: Optional[gspread.Spreadsheet] = None
+        
+        # Use HauntsAdapter if use_haunts_format is enabled
+        if config.google_sheets.use_haunts_format:
+            try:
+                self._adapter = HauntsAdapter(config, credentials_path)
+            except (ImportError, FileNotFoundError, ValueError) as e:
+                # Clear error message if haunts format requested but failed
+                raise ValueError(
+                    f"Cannot initialize haunts format sync: {e}\n"
+                    f"Solutions:\n"
+                    f"  1. Provide valid credentials_path (OAuth token or Service Account JSON)\n"
+                    f"  2. Install haunts library: pip install 'drudge-cli[sheets]'\n"
+                    f"  3. Set up haunts OAuth: run 'haunts' command first\n"
+                    f"  4. Set google_sheets.use_haunts_format=false in config to use legacy gspread"
+                ) from e
+        # Otherwise use legacy gspread backend (will be initialized lazily)
     
     def _get_client(self) -> gspread.Client:
         """Get or create the gspread client."""
@@ -221,6 +616,12 @@ class GoogleSheetsSync:
         if not task.end_time:
             raise ValueError("Cannot sync task without end_time")
         
+        # Use HauntsAdapter if available
+        if self._adapter:
+            self._adapter.sync_task(task)
+            return
+        
+        # Fall back to gspread backend
         # Parse end_time to get the date for sheet selection
         end_dt = datetime.fromisoformat(task.end_time)
         sheet_date = end_dt.strftime("%Y-%m-%d")
@@ -291,6 +692,11 @@ class GoogleSheetsSync:
             True if connection successful, False otherwise
         """
         try:
+            # Use HauntsAdapter if available
+            if self._adapter:
+                return self._adapter.test_connection()
+            
+            # Fall back to gspread backend
             spreadsheet = self._get_spreadsheet()
             # Try to access spreadsheet title to verify access
             _ = spreadsheet.title

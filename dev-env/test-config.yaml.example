@@ -1,0 +1,31 @@
+# Test Configuration for Google Sheets Sync Integration Test
+#
+# SETUP INSTRUCTIONS:
+# 1. Replace YOUR_TEST_SHEET_DOCUMENT_ID with your actual Google Sheet Document ID
+#    - Get it from URL: https://docs.google.com/spreadsheets/d/DOCUMENT_ID/edit
+# 2. Ensure test-credentials.json exists (service account JSON key)
+# 3. Share your test Google Sheet with the service account email
+#
+# DO NOT COMMIT THIS FILE WITH REAL CREDENTIALS!
+
+google_sheets:
+  enabled: true
+  
+  # REQUIRED: Your test Google Sheet Document ID
+  # Get from sheet URL: https://docs.google.com/spreadsheets/d/YOUR_ID/edit
+  document_id: "YOUR_TEST_SHEET_DOCUMENT_ID"
+  
+  # Path to service account credentials (Docker path)
+  credentials_file: "/app/test-credentials.json"
+  
+  # Duration formatting
+  hours_decimal: 1        # 1 decimal place (e.g., 2.5 hours)
+  round_hours: 0.25       # Round to 15 minutes
+  use_comma_decimal: true # European format (2,5 instead of 2.5)
+
+# Test projects (must match your test sheet config)
+projects:
+  - TestProject
+
+# Temporary worklog directory for testing
+worklog_dir: "/tmp/test-worklog"

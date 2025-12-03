@@ -1,0 +1,25 @@
+FROM python:3.10-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy project files
+COPY . /app/
+
+# Install the package in development mode with all dependencies
+RUN pip install -e . && \
+    pip install pytest
+
+# Create test directories
+RUN mkdir -p /app/test_data/daily /app/test_data/backups
+
+# Set environment variable to use test data directory
+ENV WORKLOG_HOME=/app/test_data
+
+# Default command runs all tests
+CMD ["pytest", "tests/", "-v"]

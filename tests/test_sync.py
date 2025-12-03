@@ -81,7 +81,8 @@ class TestGoogleSheetsSyncMethods:
         config.google_sheets = GoogleSheetsConfig(
             enabled=True,
             auto_sync=False,
-            round_hours=0.5
+            round_hours=0.5,
+            use_haunts_format=False  # Disable haunts for unit tests
         )
         config.sheet_document_id = "test-sheet-id-123"
         return config
@@ -168,7 +169,8 @@ class TestSyncConvenienceMethods:
         config.google_sheets = GoogleSheetsConfig(
             enabled=True,
             auto_sync=False,
-            round_hours=0.5
+            round_hours=0.5,
+            use_haunts_format=False  # Disable haunts for unit tests
         )
         config.sheet_document_id = "test-sheet-id"
         return config
@@ -294,6 +296,7 @@ class TestConfigurationValidation:
         """Test behavior when sheet_document_id is missing."""
         config = WorkLogConfig()
         config.google_sheets.enabled = True
+        config.google_sheets.use_haunts_format = False  # Disable haunts for unit test
         config.sheet_document_id = ""
         
         with patch('src.worklog.sync.sheets.Credentials'):

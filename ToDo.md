@@ -13,7 +13,7 @@
     - `drudge clean --all` - Clean all entries (with confirmation)
   - [x] Automatic backups before cleaning operations
   - [x] Smart daily file rebuilding for partial cleaning
-  - [x] All 39 test cases passing
+  - [x] All 47 test cases passing (100%)
 
 - [x] **Documentation & Release**
   - [x] Updated README.md with v2.1.0 features
@@ -50,28 +50,44 @@
 
 ## 🚀 Immediate Next Steps (Foundation)
 
-- [ ] **Test Infrastructure Refactoring**
-  - Unify test file structure and workflow refactor
-  - Create a reusable GitHub Actions workflow for running all tests in the `tests/` folder
-  - Create 2 separate workflows that call/reuse this test action:
-    - One for continuous integration (on push/PR)
-    - One for release validation (on tag creation)
-  - Move all test files to a dedicated `tests/` directory
-  - Ensure consistent test naming and organization
+- [x] **Test Infrastructure Refactoring** ✅
+  - [x] Moved all test files to dedicated `tests/` directory
+  - [x] Updated Docker test environment to use `tests/`
+  - [x] GitHub Actions workflow already configured for `tests/`
+  - [x] All 106 tests passing in organized structure
 
-- [ ] **3. Configuration file support**
-  - Add YAML/TOML configuration file support for persistent settings and user preferences
-  - Allow customization of directories, formats, and default behaviors
-  - Example: `~/.worklog/config.toml` or `~/.drudgerc`
+- [x] **Google Sheets Sync Integration** ✅
+  - [x] Integrated haunts library as optional dependency
+  - [x] Created HauntsAdapter for haunts-based sync with 3 auth methods:
+    - Haunts OAuth (~/.config/haunts/)
+    - OAuth token file (refresh_token)
+    - Service account (client_email)
+  - [x] Test end-to-end sync with real Google Sheets
+  - [x] Added `use_haunts_format` config option for format compatibility
+  - [x] Haunts-compatible column order: Date, Start time, Spent, Project, Activity, Details...
 
-## 🎯 Version 2.2.0 Planning (Future Release)
+- [x] **Configuration file support** ✅
+  - [x] YAML configuration file at `~/.worklog/config.yaml`
+  - [x] Customization of directories, formats, and default behaviors
+  - [x] Google Sheets sync configuration options
 
-### Core Feature Extensions
-- [ ] **4. Project/Category Support**
-  - Add project grouping functionality to organize tasks by project or category with filtering and reporting
-  - Enable task categorization and project-based time tracking
+### Version 2.2.0 (December 2025) ✅ **IN PROGRESS**
+- [x] **Enhanced --time option with date support**
+  - [x] Support for `--time "YYYY-MM-DD HH:MM"` format (e.g., `--time "2025-12-10 14:30"`)
+  - [x] Backward compatible with existing `--time HH:MM` format
+  - [x] Available on start, end, pause, and resume commands
+  - [x] Centralized validation in `WorkLogValidator.validate_datetime_format()`
+
+- [x] **Project/Category Support** ✅
+  - [x] Backend support in `start_task()` and `TaskEntry` model
+  - [x] CLI `--project` / `-P` option on start command
+  - [x] Project filtering with `--project` on list command
+  - [x] Project displayed in active tasks and completed entries
   - Example: `drudge start "Fix bug" --project "Backend API"`
 
+## 🎯 Version 3.0.0 Planning (Future Release)
+
+### Core Feature Extensions
 - [ ] **5. Time Goals feature**
   - Implement daily/weekly time targets with progress tracking and notifications when goals are met
   - Add goal visualization and achievement tracking
@@ -166,20 +182,28 @@
 
 ## 📊 Current Status Summary
 
-**Version:** 2.1.0 (Released October 4, 2025)
+**Version:** 2.2.0 (In Progress - December 2025)
 
 **Package Status:**
 - ✅ Published on PyPI as `drudge-cli`
 - ✅ Console command: `drudge`
 - ✅ GitHub: https://github.com/Trik16/drudge
 - ✅ Automated CI/CD with GitHub Actions
-- ✅ 39 comprehensive test cases (100% passing)
+- ✅ 106 comprehensive test cases (100% passing)
 
-**Recent Achievements (v2.1.0):**
+**Recent Achievements (v2.2.0):**
+- Google Sheets sync with haunts library integration
+- HauntsAdapter supporting 3 authentication methods
+- `use_haunts_format` config for haunts-compatible output
+- Enhanced --time option with date support (`YYYY-MM-DD HH:MM`)
+- Dev environment reorganization (dev-env/ folder)
+- Complete YAML configuration system
+
+**Previous Release (v2.1.0 - October 4, 2025):**
 - Enhanced CLI with native help system
 - New clean command for worklog management
 - End command with --all flag for paused tasks
 - Complete documentation and release notes
 - Automated testing and publishing workflows
 
-**Next Major Milestone:** Version 2.2.0 - Configuration file support & Project categorization
+**Next Major Milestone:** Version 3.0.0 - Project/Category Support & Time Goals

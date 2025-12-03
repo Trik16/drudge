@@ -188,10 +188,17 @@ class WorkLog:
                 raw_data = json.load(f)
             
             # Convert raw dict to structured data with validation
-            entries = [
-                TaskEntry(**entry) if isinstance(entry, dict) else TaskEntry(*entry)
-                for entry in raw_data.get('entries', [])
-            ]
+            # Handle both old format (without project) and new format (with project)
+            entries = []
+            for entry in raw_data.get('entries', []):
+                if isinstance(entry, dict):
+                    # Filter out any fields that TaskEntry doesn't support
+                    # This provides forward/backward compatibility
+                    valid_fields = {'task', 'start_time', 'end_time', 'duration', 'project'}
+                    filtered_entry = {k: v for k, v in entry.items() if k in valid_fields}
+                    entries.append(TaskEntry(**filtered_entry))
+                else:
+                    entries.append(TaskEntry(*entry))
             
             paused_tasks = [
                 PausedTask(**task) if isinstance(task, dict) else PausedTask(*task)
@@ -242,7 +249,7 @@ class WorkLog:
         
         Raises:
             IOError: If unable to write to disk
-            json.JSONEncodeError: If data cannot be serialized
+            TypeError, ValueError: If data cannot be serialized to JSON
         """
         # Sort entries chronologically by start_time before saving (ISO strings sort correctly)
         self.data.entries.sort(key=lambda entry: entry.start_time if isinstance(entry.start_time, str) else entry.start_time.isoformat())
@@ -263,7 +270,9 @@ class WorkLog:
                 json.dump(data_dict, f, indent=2, ensure_ascii=False)
             temp_file.replace(self.worklog_file)
             logger.debug(f"Data saved successfully to {self.worklog_file}")
-        except json.JSONEncodeError as e:
+        except (TypeError, ValueError) as e:
+            # TypeError: Object not JSON serializable
+            # ValueError: Circular reference or other JSON encoding issues
             console.print(f"❌ Failed to serialize worklog data: {e}", style="red")
             logger.error(f"JSON encoding error: {e}")
             if temp_file.exists():
@@ -358,29 +367,23 @@ class WorkLog:
     @staticmethod
     def _parse_custom_time(time_str: str) -> str:
         """
-        Parse and validate HH:MM time string for custom start times.
+        Parse and validate time string for custom start/end times.
         
-        Converts HH:MM format to a full datetime for today, with comprehensive
-        validation using centralized validation logic.
+        Supports two formats:
+        - HH:MM (e.g., "09:30", "14:45") - Uses today's date
+        - YYYY-MM-DD HH:MM (e.g., "2025-12-10 09:30") - Uses specified date
         
         Args:
-            time_str: Time string in HH:MM format (e.g., "09:30", "14:45")
+            time_str: Time string in HH:MM or YYYY-MM-DD HH:MM format
             
         Returns:
-            str: ISO timestamp for today at the specified time
+            str: ISO timestamp for the specified date and time
             
         Raises:
             ValueError: If time format is invalid or values out of range
         """
-        # Use centralized validation
-        hours, minutes = WorkLogValidator.validate_time_format(time_str)
-        
-        # Create datetime for today at specified time
-        today = datetime.now().date()
-        custom_datetime = datetime.combine(
-            today, 
-            datetime.min.time().replace(hour=hours, minute=minutes)
-        )
+        # Use centralized validation that supports both formats
+        custom_datetime = WorkLogValidator.validate_datetime_format(time_str)
         
         return custom_datetime.isoformat()
     
@@ -848,7 +851,7 @@ class WorkLog:
             console.print(f"  {date_part} {start_time} {display_name} ({entry.duration})")
     
     @requires_data
-    def list_entries(self, date: str = None, limit: int = None, task_filter: str = None) -> None:
+    def list_entries(self, date: str = None, limit: int = None, task_filter: str = None, project_filter: str = None) -> None:
         """
         List completed task entries with optional filtering.
         Shows active tasks, paused tasks, and recent activity.
@@ -857,6 +860,7 @@ class WorkLog:
             date: Optional date filter (YYYY-MM-DD format)
             limit: Optional limit on number of entries to show
             task_filter: Optional task name filter (partial match)
+            project_filter: Optional project name filter (partial match)
         """
         # Show active tasks status first
         if self.data.active_tasks:
@@ -866,7 +870,9 @@ class WorkLog:
                 display_name = "[ANONYMOUS WORK]" if task_name == self.ANONYMOUS_TASK_NAME else task_name
                 duration = self._format_duration(start_time, current_time)
                 formatted_start = self._format_display_time(start_time)
-                console.print(f"  • {display_name} - Started: {formatted_start} (Running: {duration})")
+                project = self.data.active_task_projects.get(task_name)
+                project_info = f" [dim]({project})[/dim]" if project else ""
+                console.print(f"  • {display_name}{project_info} - Started: {formatted_start} (Running: {duration})")
         
         # Show paused tasks
         if self.data.paused_tasks:
@@ -906,14 +912,22 @@ class WorkLog:
         if task_filter:
             entries = [e for e in entries if task_filter.lower() in e.task.lower()]
         
+        # Apply project filter
+        if project_filter:
+            entries = [e for e in entries if e.project and project_filter.lower() in e.project.lower()]
+        
         # If no filters applied, show only last 2 recent tasks
-        if not date and not task_filter and not limit:
+        if not date and not task_filter and not project_filter and not limit:
             entries = entries[-2:]  # Last 2 recent tasks
         elif limit:
             entries = entries[-limit:]  # Show most recent if limited
         
         if not entries:
-            filter_desc = f" (filtered: date={date}, task={task_filter})" if (date or task_filter) else ""
+            filters = []
+            if date: filters.append(f"date={date}")
+            if task_filter: filters.append(f"task={task_filter}")
+            if project_filter: filters.append(f"project={project_filter}")
+            filter_desc = f" (filtered: {', '.join(filters)})" if filters else ""
             console.print(f"📋 No completed tasks found{filter_desc}", style="dim")
             return
         
@@ -924,8 +938,9 @@ class WorkLog:
             display_name = "[ANONYMOUS WORK]" if entry.task == self.ANONYMOUS_TASK_NAME else entry.task
             start_display = self._format_display_time(entry.start_time)
             end_display = self._format_display_time(entry.end_time)
+            project_info = f" [dim]({entry.project})[/dim]" if entry.project else ""
             console.print(
-                f"  • {display_name}\n"
+                f"  • {display_name}{project_info}\n"
                 f"    {start_display} → {end_display} ({entry.duration})"
             )
     
