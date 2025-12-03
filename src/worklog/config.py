@@ -40,32 +40,14 @@ def get_template_config() -> str:
         template_path = Path(__file__).parent / 'config.yaml.example'
         if template_path.exists():
             return template_path.read_text()
-        # Last resort: return minimal default
-        return """# Drudge CLI Configuration
-# Location: ~/.worklog/config.yaml
-
-worklog_dir_name: .worklog
-date_format: "%Y-%m-%d"
-time_format: "%H:%M"
-display_time_format: "%Y-%m-%d %H:%M:%S"
-max_recent_tasks: 10
-backup_enabled: true
-auto_save: true
-max_backups: 5
-sheet_document_id: ""
-timezone: ""
-projects: []
-
-google_sheets:
-  enabled: false
-  auto_sync: false
-  round_hours: 0.5
-  use_haunts_format: true
-
-haunts:
-  enabled: false
-  config_path: "~/.haunts"
-"""
+        
+        # Last resort: generate from dataclass defaults
+        # This ensures consistency with actual default values
+        default_config = WorkLogConfig()
+        config_dict = asdict(default_config)
+        config_dict.pop('worklog_dir', None)  # Remove internal override
+        
+        return yaml.dump(config_dict, default_flow_style=False, sort_keys=False)
 
 
 def ensure_config_exists(config_path: Optional[Path] = None) -> Path:

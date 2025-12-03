@@ -43,7 +43,7 @@ projects:
 
 google_sheets:
   # Enable/disable Google Sheets sync
-  enabled: true
+  enabled: false
   
   # Use haunts-compatible format (DD/MM/YYYY, HH:MM, comma decimal)
   # true  = Haunts format (works with haunts OAuth or standalone)

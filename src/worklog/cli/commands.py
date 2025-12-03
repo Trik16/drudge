@@ -42,7 +42,7 @@ def get_worklog() -> WorkLog:
     """
     global _worklog_instance
     if _worklog_instance is None:
-        config = WorkLogConfig()
+        config = WorkLogConfig.load_from_yaml()
         _worklog_instance = WorkLog(config=config)
     return _worklog_instance
 

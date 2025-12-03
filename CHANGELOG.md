@@ -2,6 +2,13 @@
 
 All notable changes to drudge-cli will be documented in this file.
 
+## [2.2.2] - 2025-12-03
+
+### Fixed
+- **Critical bug**: `get_worklog()` was creating config with defaults instead of loading from YAML
+- **Config now loaded correctly**: All commands now properly read `~/.worklog/config.yaml` settings
+- **Template default changed**: `google_sheets.enabled` now defaults to `false` to avoid confusion
+
 ## [2.2.1] - 2025-12-03
 
 ### Added

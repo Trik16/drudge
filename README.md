@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/drudge-cli.svg)](https://pypi.org/project/drudge-cli/)
 [![Python](https://img.shields.io/pypi/pyversions/drudge-cli.svg)](https://pypi.org/project/drudge-cli/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.2.1-blue.svg)](https://github.com/Trik16/drudge/releases)
+[![Version](https://img.shields.io/badge/version-2.2.2-blue.svg)](https://github.com/Trik16/drudge/releases)
 [![Tests](https://github.com/Trik16/drudge/actions/workflows/test.yml/badge.svg)](https://github.com/Trik16/drudge/actions/workflows/test.yml)
 
 A comprehensive, professionally architected command-line tool for tracking work time on tasks with organized daily logs. Built with modern Python package structure, Typer CLI framework, Rich formatting, type hints, dataclasses, and enterprise-level architectural patterns.
