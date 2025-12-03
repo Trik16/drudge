@@ -5,6 +5,7 @@ This module tests ALL commands with ALL options to ensure complete CLI coverage.
 Tests are run using Typer's CliRunner for isolated testing.
 """
 
+import re
 import unittest
 import tempfile
 import shutil
@@ -13,6 +14,12 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from src.worklog.cli.commands import app
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text."""
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    return ansi_escape.sub('', text)
 
 
 class TestCLICommands(unittest.TestCase):
@@ -94,9 +101,10 @@ class TestCLICommands(unittest.TestCase):
         """Test start command help."""
         result = self.runner.invoke(app, ["start", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("Start a new task", result.stdout)
-        self.assertIn("--parallel", result.stdout)
-        self.assertIn("--time", result.stdout)
+        output = strip_ansi(result.stdout)
+        self.assertIn("Start a new task", output)
+        self.assertIn("--parallel", output)
+        self.assertIn("--time", output)
     
     # ========================================================================
     # END Command Tests
@@ -148,9 +156,10 @@ class TestCLICommands(unittest.TestCase):
         """Test end command help."""
         result = self.runner.invoke(app, ["end", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("End an active task", result.stdout)
-        self.assertIn("--all", result.stdout)
-        self.assertIn("--sync", result.stdout)
+        output = strip_ansi(result.stdout)
+        self.assertIn("End an active task", output)
+        self.assertIn("--all", output)
+        self.assertIn("--sync", output)
     
     # ========================================================================
     # PAUSE/RESUME Command Tests
@@ -216,7 +225,8 @@ class TestCLICommands(unittest.TestCase):
         """Test list command help."""
         result = self.runner.invoke(app, ["list", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("Show work status", result.stdout)
+        output = strip_ansi(result.stdout)
+        self.assertIn("Show work status", output)
     
     # ========================================================================
     # RECENT Command Tests
@@ -261,8 +271,9 @@ class TestCLICommands(unittest.TestCase):
         """Test daily command help."""
         result = self.runner.invoke(app, ["daily", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("Show daily work summary", result.stdout)
-        self.assertIn("--sync", result.stdout)
+        output = strip_ansi(result.stdout)
+        self.assertIn("Show daily work summary", output)
+        self.assertIn("--sync", output)
     
     # ========================================================================
     # SYNC Command Tests
@@ -298,10 +309,11 @@ class TestCLICommands(unittest.TestCase):
         """Test sync command help."""
         result = self.runner.invoke(app, ["sync", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("Sync worklog entries", result.stdout)
-        self.assertIn("--daily", result.stdout)
-        self.assertIn("--monthly", result.stdout)
-        self.assertIn("--test", result.stdout)
+        output = strip_ansi(result.stdout)
+        self.assertIn("Sync worklog entries", output)
+        self.assertIn("--daily", output)
+        self.assertIn("--monthly", output)
+        self.assertIn("--test", output)
     
     # ========================================================================
     # CLEAN Command Tests
@@ -334,7 +346,8 @@ class TestCLICommands(unittest.TestCase):
         """Test clean command help."""
         result = self.runner.invoke(app, ["clean", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("Clean worklog entries", result.stdout)
+        output = strip_ansi(result.stdout)
+        self.assertIn("Clean worklog entries", output)
     
     # ========================================================================
     # CONFIG Command Tests
@@ -369,10 +382,11 @@ class TestCLICommands(unittest.TestCase):
         """Test main help command."""
         result = self.runner.invoke(app, ["--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("Drudge CLI", result.stdout)
-        self.assertIn("start", result.stdout)
-        self.assertIn("end", result.stdout)
-        self.assertIn("sync", result.stdout)
+        output = strip_ansi(result.stdout)
+        self.assertIn("Drudge CLI", output)
+        self.assertIn("start", output)
+        self.assertIn("end", output)
+        self.assertIn("sync", output)
     
     # ========================================================================
     # Error Handling Tests
